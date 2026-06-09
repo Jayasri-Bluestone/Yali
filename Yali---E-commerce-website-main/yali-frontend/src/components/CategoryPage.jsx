@@ -10,6 +10,9 @@ import { ProductCard } from './ProductCard';
 import { FilterSidebar } from './FilterSidebar';
 import { formatINR } from '../utils/currency';
 import { VideoCard } from './HomeVideoSection';
+import { API_URL } from '../config';
+import { DynamicSectionRenderer } from './sections/DynamicSectionRenderer';
+import { ProductScrollRow } from '../App';
 
 // ─── Category master config ────────────────────────────────────────────────────
 const CATEGORY_CONFIG = {
@@ -485,6 +488,9 @@ export function CategoryPage({
   const [sortBy, setSortBy] = useState('default');
   const [viewMode, setViewMode] = useState('grid');
   
+  const [dynamicSections, setDynamicSections] = useState([]);
+  const [isLoadingSections, setIsLoadingSections] = useState(true);
+
   const [sidebarFilters, setSidebarFilters] = useState({
     categories: [],
     priceMin: '',
@@ -500,6 +506,18 @@ export function CategoryPage({
     setExpandedId(videos[0]?.id || null);
     setActiveSubCat('All');
     setSortBy('default');
+
+    setIsLoadingSections(true);
+    fetch(`${API_URL}/page-sections/category:${categoryKey}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setDynamicSections(data);
+        setIsLoadingSections(false);
+      })
+      .catch(err => {
+        console.error('Failed to fetch category layout', err);
+        setIsLoadingSections(false);
+      });
   }, [categoryKey]);
 
   const CategoryIcon = cfg.icon;
@@ -623,6 +641,32 @@ export function CategoryPage({
           </div>
         </div>
         <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-gray-50 to-transparent" />
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4">
+        {/* ══════════════════════════════════════════════════════════
+            DYNAMIC SECTIONS (If configured via Admin)
+        ══════════════════════════════════════════════════════════ */}
+        {!isLoadingSections && dynamicSections.length > 0 && (
+          <div className="flex flex-col gap-2 mb-10">
+            {dynamicSections.map(sec => (
+              <DynamicSectionRenderer 
+                key={sec.id} 
+                section={sec} 
+                products={products}
+                videos={videos}
+                banners={[]}
+                uiCards={[]}
+                wishlistItems={wishlistItems}
+                onAddToCart={onAddToCart}
+                onProductClick={onProductClick}
+                onToggleWishlist={onToggleWishlist}
+                onCategoryClick={() => {}}
+                ProductScrollRowComponent={ProductScrollRow}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ══════════════════════════════════════════════════════════

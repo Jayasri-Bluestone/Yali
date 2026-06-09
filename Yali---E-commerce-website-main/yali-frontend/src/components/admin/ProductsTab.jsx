@@ -1,5 +1,7 @@
 import { Search, Upload, Plus, Edit, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
+import { Pagination } from './Pagination';
 
 export function ProductsTab({
   filteredProducts,
@@ -19,6 +21,20 @@ export function ProductsTab({
   handleDeleteProduct,
   handleToggleStatus
 }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [productSearch, categoryFilter]);
+
+  const filteredList = filteredProducts
+    .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+    .filter(p => categoryFilter === 'all' || p.category === categoryFilter);
+
+  const totalPages = Math.ceil(filteredList.length / ITEMS_PER_PAGE);
+  const currentItems = filteredList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between gap-4">
@@ -50,6 +66,7 @@ export function ProductsTab({
                 originalPrice: '',
                 category: isCategoryAdmin ? adminCategory : 'real-estate',
                 image: '',
+                images: [],
                 stock: '',
                 description: '',
                 badge: ''
@@ -106,10 +123,7 @@ export function ProductsTab({
             </tr>
           </thead>
           <tbody>
-            {filteredProducts
-              .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
-              .filter(p => categoryFilter === 'all' || p.category === categoryFilter)
-              .map(p => {
+            {currentItems.map(p => {
                 const isLowStock = (p.stock ?? 0) < 5;
                 return (
                   <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
@@ -163,6 +177,12 @@ export function ProductsTab({
           </tbody>
         </table>
       </div>
+
+      <Pagination 
+        currentPage={currentPage} 
+        totalPages={totalPages} 
+        onPageChange={setCurrentPage} 
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, ShoppingCart, Search, RefreshCw, User, Package } from 'lucide-react';
 import { API_URL } from '../../config';
+import { Pagination } from './Pagination';
 
 export function CartsTab({ token, showToast }) {
   const [cartItems, setCartItems] = useState([]);
@@ -48,6 +49,16 @@ export function CartsTab({ token, showToast }) {
       (item.unique_id || '').toLowerCase().includes(term)
     );
   });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const currentItems = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   // Group by user for summary stats
   const uniqueUsers = [...new Set(cartItems.map(i => i.user_id))];
@@ -135,7 +146,7 @@ export function CartsTab({ token, showToast }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(item => (
+                {currentItems.map(item => (
                   <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                     <td className="py-3 px-3 text-xs text-gray-400 font-mono">#{item.id}</td>
                     <td className="py-3 px-3">
@@ -183,6 +194,14 @@ export function CartsTab({ token, showToast }) {
               </tbody>
             </table>
           </div>
+        )}
+        
+        {!loading && filtered.length > 0 && (
+          <Pagination 
+            currentPage={currentPage} 
+            totalPages={totalPages} 
+            onPageChange={setCurrentPage} 
+          />
         )}
       </div>
     </div>

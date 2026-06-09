@@ -1,5 +1,7 @@
 import { Plus, Trash2, Edit2 } from 'lucide-react';
+import { useState } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
+import { Pagination } from './Pagination';
 
 export function CouponsTab({
   coupons,
@@ -10,6 +12,12 @@ export function CouponsTab({
   handleDeleteCoupon,
   handleToggleStatus
 }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  
+  const totalPages = Math.ceil(coupons.length / ITEMS_PER_PAGE);
+  const currentItems = coupons.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
@@ -24,7 +32,7 @@ export function CouponsTab({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {coupons.map(c => (
+        {currentItems.map(c => (
           <div key={c.code} className="bg-gray-50 border border-gray-200 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
             <div className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-8 bg-white border-r border-gray-200 rounded-r-full" />
             <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-8 bg-white border-l border-gray-200 rounded-l-full" />
@@ -69,6 +77,12 @@ export function CouponsTab({
           <div className="col-span-full text-center py-8 text-gray-400 text-sm">No coupons found. Create one to get started!</div>
         )}
       </div>
+
+      <Pagination 
+        currentPage={currentPage} 
+        totalPages={totalPages} 
+        onPageChange={setCurrentPage} 
+      />
     </div>
   );
 }

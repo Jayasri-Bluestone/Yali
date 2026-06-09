@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, Heart, Search, RefreshCw, User, TrendingUp } from 'lucide-react';
 import { API_URL } from '../../config';
+import { Pagination } from './Pagination';
 
 export function WishlistsTab({ token, showToast }) {
   const [wishlistItems, setWishlistItems] = useState([]);
@@ -49,6 +50,16 @@ export function WishlistsTab({ token, showToast }) {
       (item.category || '').toLowerCase().includes(term)
     );
   });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const currentItems = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   // Analytics
   const uniqueUsers = [...new Set(wishlistItems.map(i => i.user_id))];
@@ -166,7 +177,7 @@ export function WishlistsTab({ token, showToast }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(item => (
+                {currentItems.map(item => (
                   <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                     <td className="py-3 px-3 text-xs text-gray-400 font-mono">#{item.id}</td>
                     <td className="py-3 px-3">
@@ -209,6 +220,14 @@ export function WishlistsTab({ token, showToast }) {
               </tbody>
             </table>
           </div>
+        )}
+
+        {!loading && filtered.length > 0 && (
+          <Pagination 
+            currentPage={currentPage} 
+            totalPages={totalPages} 
+            onPageChange={setCurrentPage} 
+          />
         )}
       </div>
     </div>

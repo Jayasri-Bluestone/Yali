@@ -50,6 +50,8 @@ import {
 } from 'lucide-react';
 import './styles/custom.css';
 import { useToast } from './context/ToastContext';
+import { DynamicSectionRenderer } from './components/sections/DynamicSectionRenderer';
+import { CustomPage } from './components/CustomPage';
 
 
 
@@ -109,7 +111,7 @@ function SectionHeader({ icon: Icon, iconColor, title, subtitle, action, onActio
 // ─────────────────────────────────────────────
 // Horizontal scroll product row
 // ─────────────────────────────────────────────
-function ProductScrollRow({ products, wishlistItems, onAddToCart, onProductClick, onToggleWishlist, cardWidth = 'w-48 sm:w-56', autoScroll = false }) {
+export function ProductScrollRow({ products, wishlistItems, onAddToCart, onProductClick, onToggleWishlist, cardWidth = 'w-48 sm:w-56', autoScroll = false }) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -202,6 +204,21 @@ function HomePageSections({
 }) {
   const countdown = useCountdown(11);
   const [budgetFilter, setBudgetFilter] = useState('all');
+  const [dynamicSections, setDynamicSections] = useState([]);
+  const [isLoadingSections, setIsLoadingSections] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_URL}/page-sections/home`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setDynamicSections(data);
+        setIsLoadingSections(false);
+      })
+      .catch(err => {
+        console.error('Failed to fetch home layout', err);
+        setIsLoadingSections(false);
+      });
+  }, []);
 
   const budgetRanges = [
     { label: 'All', value: 'all' },
@@ -252,6 +269,29 @@ function HomePageSections({
   const promoCards = uiCards.filter(c => c.section === 'promo_card');
 
   const pad = (n) => String(n).padStart(2, '0');
+
+  if (!isLoadingSections && dynamicSections.length > 0) {
+    return (
+      <div className="flex flex-col gap-2">
+        {dynamicSections.map(sec => (
+          <DynamicSectionRenderer 
+            key={sec.id} 
+            section={sec} 
+            products={products}
+            videos={videos}
+            banners={banners}
+            uiCards={uiCards}
+            wishlistItems={wishlistItems}
+            onAddToCart={onAddToCart}
+            onProductClick={onProductClick}
+            onToggleWishlist={onToggleWishlist}
+            onCategoryClick={onCategoryClick}
+            ProductScrollRowComponent={ProductScrollRow}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -624,11 +664,66 @@ export default function App() {
   
   // Cart & Orders
   const [cartItems, setCartItems] = useState([]);
+  const [checkoutItems, setCheckoutItems] = useState([]);
   
   const navigate = useNavigate();
 
   // Wishlist State
   const [wishlistItems, setWishlistItems] = useState([]);
+
+  // -------------------------------------------------------------
+  // Location Tracking
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const trackLocation = async () => {
+      if (sessionStorage.getItem('locationPrompted')) return;
+      
+      sessionStorage.setItem('locationPrompted', 'true');
+
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            let city = '';
+            let country = '';
+
+            try {
+              const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+              if (geoRes.ok) {
+                const geoData = await geoRes.json();
+                city = geoData.address?.city || geoData.address?.town || geoData.address?.village || '';
+                country = geoData.address?.country || '';
+              }
+            } catch (err) {
+              console.warn('Reverse geocoding failed', err);
+            }
+
+            let sessionId = sessionStorage.getItem('visitor_session_id');
+            if (!sessionId) {
+              sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
+              sessionStorage.setItem('visitor_session_id', sessionId);
+            }
+
+            try {
+              await fetch(`${API_URL}/locations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId, latitude, longitude, city, country })
+              });
+            } catch (err) {
+              console.error('Failed to save location', err);
+            }
+          },
+          (error) => {
+            console.warn('Geolocation error:', error);
+          }
+        );
+      }
+    };
+    
+    const timer = setTimeout(trackLocation, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const fetchCartItems = async () => {
     if (!token) return;
@@ -901,6 +996,22 @@ export default function App() {
     } catch (err) {
       showToast('Error adding to cart', 'error');
     }
+  };
+
+  const handleBuyNow = async (product) => {
+    if (!isLoggedIn) {
+      showToast('Please login to continue purchase', 'info');
+      setIsAuthOpen(true);
+      return;
+    }
+
+    if (userData?.status === 'disabled') {
+      showToast('Your account is currently disabled. Please contact support.', 'error');
+      return;
+    }
+
+    setCheckoutItems([{ ...product, quantity: 1 }]);
+    navigate('/checkout');
   };
 
   const handleToggleWishlist = async (product) => {
@@ -1177,6 +1288,7 @@ export default function App() {
                   <ProductDetailsPage
                     allProducts={activeProducts}
                     onAddToCart={handleAddToCart}
+                    onBuyNow={handleBuyNow}
                     wishlistItems={wishlistItems}
                     onToggleWishlist={handleToggleWishlist}
                   />
@@ -1186,6 +1298,10 @@ export default function App() {
                     items={cartItems}
                     onUpdateQuantity={handleUpdateQuantity}
                     onRemoveItem={handleRemoveItem}
+                    onProceedToCheckout={() => {
+                      setCheckoutItems(cartItems);
+                      navigate('/checkout');
+                    }}
                   />
                 } />
                 <Route path="/wishlist" element={
@@ -1197,7 +1313,7 @@ export default function App() {
                 } />
                 <Route path="/checkout" element={
                   <CheckoutPage
-                    items={cartItems}
+                    items={checkoutItems.length > 0 ? checkoutItems : cartItems}
                     onPaymentSuccess={handlePaymentSuccess}
                     coupons={coupons}
                     token={token}
@@ -1214,6 +1330,19 @@ export default function App() {
                   />
                 } />
                 <Route path="/page/:pageId" element={<StaticPage />} />
+                <Route path="/p/:pageId" element={
+                  <CustomPage
+                    products={activeProducts}
+                    videos={activeVideos}
+                    banners={activeBanners}
+                    uiCards={activeUiCards}
+                    wishlistItems={wishlistItems}
+                    onAddToCart={handleAddToCart}
+                    onProductClick={(product) => navigate(`/product/${product.id}`)}
+                    onToggleWishlist={handleToggleWishlist}
+                    ProductScrollRowComponent={ProductScrollRow}
+                  />
+                } />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             );

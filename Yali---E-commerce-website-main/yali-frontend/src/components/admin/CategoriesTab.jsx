@@ -1,5 +1,7 @@
 import { Tag, Building, Home, Bike, Car, Leaf, AlertTriangle, Plus, Edit, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
+import { Pagination } from './Pagination';
 
 export function CategoriesTab({
   products,
@@ -15,6 +17,17 @@ export function CategoriesTab({
   handleDeleteProduct,
   handleToggleStatus
 }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategoryTab]);
+
+  const selectedProducts = selectedCategoryTab ? products.filter(p => p.category === selectedCategoryTab) : [];
+  const totalPages = Math.ceil(selectedProducts.length / ITEMS_PER_PAGE);
+  const currentItems = selectedProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Category Cards Grid */}
@@ -109,6 +122,7 @@ export function CategoriesTab({
                           originalPrice: '',
                           category: cat.value,
                           image: '',
+                          images: [],
                           stock: '',
                           description: '',
                           badge: ''
@@ -173,9 +187,7 @@ export function CategoriesTab({
                 </tr>
               </thead>
               <tbody>
-                {products
-                  .filter(p => p.category === selectedCategoryTab)
-                  .map(p => {
+                {currentItems.map(p => {
                     const isLowStock = (p.stock ?? 0) < 5;
                     return (
                       <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
@@ -225,7 +237,7 @@ export function CategoriesTab({
                       </tr>
                     );
                   })}
-                {products.filter(p => p.category === selectedCategoryTab).length === 0 && (
+                {selectedProducts.length === 0 && (
                   <tr>
                     <td colSpan={4} className="p-8 text-center text-gray-400">
                       No products found in this category. Click the "Add Product" button to create one!
@@ -235,6 +247,11 @@ export function CategoriesTab({
               </tbody>
             </table>
           </div>
+          <Pagination 
+            currentPage={currentPage} 
+            totalPages={totalPages} 
+            onPageChange={setCurrentPage} 
+          />
         </div>
       )}
     </div>

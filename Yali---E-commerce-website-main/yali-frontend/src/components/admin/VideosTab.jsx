@@ -1,9 +1,10 @@
 import { Plus, Trash2, Edit2, Video, Play, Clock, XCircle, Tag } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileUploadInput } from './FileUploadInput';
 import { ToggleSwitch } from './ToggleSwitch';
 import { useToast } from '../../context/ToastContext';
 import { API_URL } from '../../config';
+import { Pagination } from './Pagination';
 
 export function VideosTab({
   videos = [],
@@ -32,11 +33,16 @@ export function VideosTab({
     category: isCategoryAdmin ? adminCategory : 'real-estate'
   });
 
-  // Filter list based on scoped category
   const filteredVideos = videos.filter((v) => {
     if (isCategoryAdmin) return v.category === adminCategory;
     return true;
   });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  
+  const totalPages = Math.ceil(filteredVideos.length / ITEMS_PER_PAGE);
+  const currentItems = filteredVideos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const handleOpenAddModal = () => {
     setEditingVideo(null);
@@ -161,7 +167,7 @@ export function VideosTab({
             </tr>
           </thead>
           <tbody>
-            {filteredVideos.map((vid) => (
+            {currentItems.map((vid) => (
               <tr key={vid.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                 <td className="p-4">
                   <div className="font-bold text-gray-900 flex items-center gap-2">
@@ -233,6 +239,12 @@ export function VideosTab({
           </tbody>
         </table>
       </div>
+
+      <Pagination 
+        currentPage={currentPage} 
+        totalPages={totalPages} 
+        onPageChange={setCurrentPage} 
+      />
 
       {/* Add / Edit Modal */}
       {isModalOpen && (

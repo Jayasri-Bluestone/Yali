@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { formatINR } from '../utils/currency';
 
-export function ProductDetailModal({ product, isOpen, onClose, onAddToCart, isWishlisted, onToggleWishlist }) {
+export function ProductDetailModal({ product, isOpen, onClose, onAddToCart, onBuyNow, isWishlisted, onToggleWishlist }) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [showVideo, setShowVideo] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -48,7 +48,16 @@ export function ProductDetailModal({ product, isOpen, onClose, onAddToCart, isWi
             {/* Left: Image Gallery */}
             <div className="space-y-4">
               {/* Main Image/Video */}
-              <div className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden">
+              <div className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden group">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleWishlist?.(product);
+                  }}
+                  className="absolute top-4 right-4 z-20 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform cursor-pointer"
+                >
+                  <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600 hover:text-red-500'}`} />
+                </button>
                 {showVideo && product.videoUrl ? (
                   <div className="w-full h-full">
                     <video
@@ -221,35 +230,35 @@ export function ProductDetailModal({ product, isOpen, onClose, onAddToCart, isWi
 
               {/* Action Buttons */}
               <div className="space-y-3">
-                <button
-                  onClick={() => {
-                    for (let i = 0; i < quantity; i++) {
-                      onAddToCart(product);
-                    }
-                    onClose();
-                  }}
-                  className="w-full py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
-                >
-                  <ShoppingCart className="w-5 h-5" />
-                  Add to Cart
-                </button>
                 <div className="grid grid-cols-2 gap-3">
                   <button
-                    onClick={() => onToggleWishlist?.(product)}
-                    className={`py-3 border-2 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                      isWishlisted
-                        ? 'border-red-500 text-red-500 bg-red-50'
-                        : 'border-gray-300 text-gray-700 hover:border-gray-400'
-                    }`}
+                    onClick={() => {
+                      for (let i = 0; i < quantity; i++) {
+                        onBuyNow(product);
+                      }
+                      onClose();
+                    }}
+                    className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
                   >
-                    <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-red-500' : ''}`} />
-                    {isWishlisted ? 'Wishlisted' : 'Wishlist'}
+                    Buy Now
                   </button>
-                  <button className="py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:border-gray-400 transition-all flex items-center justify-center gap-2">
-                    <Share2 className="w-5 h-5" />
-                    Share
+                  <button
+                    onClick={() => {
+                      for (let i = 0; i < quantity; i++) {
+                        onAddToCart(product);
+                      }
+                      onClose();
+                    }}
+                    className="w-full py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
+                  >
+                    <ShoppingCart className="w-5 h-5" />
+                    Add to Cart
                   </button>
                 </div>
+                <button className="w-full py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:border-gray-400 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  <Share2 className="w-5 h-5" />
+                  Share Product
+                </button>
               </div>
 
               {/* Guarantees */}

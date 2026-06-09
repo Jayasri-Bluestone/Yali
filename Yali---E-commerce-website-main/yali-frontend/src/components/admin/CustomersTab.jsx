@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
 import { API_URL } from '../../config';
 import { ShoppingCart, Heart, XCircle, Eye } from 'lucide-react';
+import { Pagination } from './Pagination';
 
 export function CustomersTab({
   users,
@@ -14,6 +15,12 @@ export function CustomersTab({
   const [carts, setCarts] = useState([]);
   const [wishlists, setWishlists] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  
+  const filteredUsers = users.filter(u => u.role === 'customer');
+  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
+  const currentItems = filteredUsers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   useEffect(() => {
     if (!token) return;
@@ -44,9 +51,7 @@ export function CustomersTab({
             </tr>
           </thead>
           <tbody>
-            {users
-              .filter(u => u.role === 'customer')
-              .map(u => (
+            {currentItems.map(u => (
                 <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                   <td className="p-4">
                     <div className="font-bold text-gray-950">{u.name}</div>
@@ -105,6 +110,12 @@ export function CustomersTab({
           </tbody>
         </table>
       </div>
+
+      <Pagination 
+        currentPage={currentPage} 
+        totalPages={totalPages} 
+        onPageChange={setCurrentPage} 
+      />
 
       {/* User Activity Modal */}
       {selectedUser && (

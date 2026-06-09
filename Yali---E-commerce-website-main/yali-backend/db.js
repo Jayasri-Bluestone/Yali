@@ -68,10 +68,13 @@ async function initDB() {
         description TEXT,
         price DECIMAL(10,2) NOT NULL,
         original_price DECIMAL(10,2) NULL,
-        image VARCHAR(500),
+        image MEDIUMTEXT,
         stock INT DEFAULT 0,
         badge VARCHAR(50) NULL,
         category VARCHAR(100) NOT NULL,
+        images MEDIUMTEXT,
+        return_policy VARCHAR(255) DEFAULT '7 Days Replacement',
+        delivery_days INT DEFAULT 3,
         rating DECIMAL(3,2) DEFAULT 5.00,
         reviews_count INT DEFAULT 0,
         vendor_id INT NULL,
@@ -99,6 +102,7 @@ async function initDB() {
         tracking_number VARCHAR(100) DEFAULT '',
         assigned_vendor_id INT NULL,
         category VARCHAR(100) NULL,
+        expected_delivery_date DATE NULL,
         order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (assigned_vendor_id) REFERENCES users(id) ON DELETE SET NULL
@@ -147,6 +151,32 @@ async function initDB() {
       if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add unique_id to products:', e.message);
     }
     try {
+      await connection.query("ALTER TABLE products MODIFY COLUMN image MEDIUMTEXT");
+      await connection.query("ALTER TABLE products MODIFY COLUMN images MEDIUMTEXT");
+    } catch (e) {
+      console.warn('Could not modify image columns in products:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE orders ADD COLUMN expected_delivery_date DATE NULL");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add expected_delivery_date to orders:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE products ADD COLUMN images TEXT");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add images to products:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE products ADD COLUMN return_policy VARCHAR(255) DEFAULT '7 Days Replacement'");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add return_policy to products:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE products ADD COLUMN delivery_days INT DEFAULT 3");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add delivery_days to products:', e.message);
+    }
+    try {
       // Inline migration: Assign sequential category-based unique IDs to all existing products
       const [existingProds] = await connection.query('SELECT id, category, unique_id FROM products');
       for (const row of existingProds) {
@@ -174,6 +204,11 @@ async function initDB() {
       if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add status to banners:', e.message);
     }
     try {
+      await connection.query("ALTER TABLE banners MODIFY COLUMN bg_image MEDIUMTEXT");
+    } catch (e) {
+      console.warn('Could not modify bg_image column in banners:', e.message);
+    }
+    try {
       await connection.query("ALTER TABLE videos ADD COLUMN status ENUM('active', 'inactive') DEFAULT 'active'");
     } catch (e) {
       if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add status to videos:', e.message);
@@ -192,7 +227,7 @@ async function initDB() {
         subtitle VARCHAR(255),
         cta VARCHAR(50) DEFAULT 'Explore Now',
         discount VARCHAR(50),
-        bg_image VARCHAR(500),
+        bg_image MEDIUMTEXT,
         gradient VARCHAR(100),
         category VARCHAR(100) NULL,
         status ENUM('active', 'inactive') DEFAULT 'active'
@@ -243,6 +278,21 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 10.5 Create Page Sections Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS page_sections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        page_id VARCHAR(50) NOT NULL,
+        section_type VARCHAR(50) NOT NULL,
+        title VARCHAR(255),
+        subtitle VARCHAR(255),
+        display_order INT DEFAULT 0,
+        content JSON,
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // 11. Create Cart Items Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS cart_items (
@@ -269,6 +319,42 @@ async function initDB() {
         UNIQUE KEY unique_user_product (user_id, product_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // 13. Create Visitor Locations Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS visitor_locations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL,
+        latitude DECIMAL(10,8) NOT NULL,
+        longitude DECIMAL(11,8) NOT NULL,
+        city VARCHAR(255),
+        country VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 14. Create Product Reviews Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS product_reviews (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        user_id INT NOT NULL,
+        author_name VARCHAR(255) NOT NULL,
+        rating INT NOT NULL,
+        comment TEXT,
+        media MEDIUMTEXT NULL,
+        status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    try {
+      await connection.query("ALTER TABLE product_reviews MODIFY media MEDIUMTEXT NULL");
+    } catch (e) {
+      console.warn('Could not modify media to MEDIUMTEXT in product_reviews:', e.message);
+    }
 
     console.log('Tables verified/created successfully.');
 

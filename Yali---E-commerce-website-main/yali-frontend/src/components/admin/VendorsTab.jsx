@@ -1,17 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
 import { Plus, X } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { API_URL } from '../../config';
+import { Pagination } from './Pagination';
 
 export function VendorsTab({
   users,
   handleToggleUserStatus,
   refreshUsers,
-  token
+  token,
+  categoriesList = [],
+  handleUserRoleChange
 }) {
   const { showToast } = useToast();
   const vendors = users.filter(u => u.role === 'vendor');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  
+  const totalPages = Math.ceil(vendors.length / ITEMS_PER_PAGE);
+  const currentItems = vendors.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -78,11 +87,12 @@ export function VendorsTab({
               <th className="p-4">Tax / GSTIN ID</th>
               <th className="p-4">Store Description</th>
               <th className="p-4">Fulfillment Status</th>
+              <th className="p-4">Vendor Category Lock</th>
               <th className="p-4 text-right rounded-r-lg">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {vendors.map(u => (
+            {currentItems.map(u => (
               <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                 <td className="p-4 font-bold text-gray-950">{u.vendorDetails?.companyName || 'N/A'}</td>
                 <td className="p-4">
@@ -103,6 +113,18 @@ export function VendorsTab({
                     {u.status === 'active' ? 'Approved' : (u.status === 'pending_approval' ? 'Pending Approval' : 'Disabled / Rejected')}
                   </span>
                 </td>
+                <td className="p-4">
+                  <select
+                    value={u.managed_category || 'all'}
+                    onChange={(e) => handleUserRoleChange(u.id, u.role, e.target.value === 'all' ? null : e.target.value)}
+                    className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">Full Access (All)</option>
+                    {categoriesList.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </td>
                 <td className="p-4 text-right">
                   <ToggleSwitch 
                     checked={u.status === 'active'}
@@ -115,12 +137,18 @@ export function VendorsTab({
             ))}
             {vendors.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-gray-400">No vendors registered in directory.</td>
+                <td colSpan={7} className="p-8 text-center text-gray-400">No vendors registered in directory.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      <Pagination 
+        currentPage={currentPage} 
+        totalPages={totalPages} 
+        onPageChange={setCurrentPage} 
+      />
 
       {isAdding && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in">

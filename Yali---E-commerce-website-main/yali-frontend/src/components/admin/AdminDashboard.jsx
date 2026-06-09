@@ -16,7 +16,10 @@ import {
   Film,
   Layers,
   ShoppingCart,
-  Heart
+  Heart,
+  MapPin,
+  MessageSquare,
+  Trash2
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
@@ -34,6 +37,9 @@ import { VideosTab } from './VideosTab';
 import { UICardsTab } from './UICardsTab';
 import { CartsTab } from './CartsTab';
 import { WishlistsTab } from './WishlistsTab';
+import { LocationsTab } from './LocationsTab';
+import { ReviewsTab } from './ReviewsTab';
+import { PageBuilderTab } from './PageBuilderTab';
 import { FileUploadInput } from './FileUploadInput';
 import { API_URL } from '../../config';
 
@@ -100,6 +106,9 @@ export function AdminDashboard({
     originalPrice: '',
     category: 'real-estate',
     image: '',
+    images: '',
+    returnPolicy: '7 Days Replacement',
+    deliveryDays: '3',
     stock: '',
     description: '',
     badge: ''
@@ -133,6 +142,9 @@ export function AdminDashboard({
     return true;
   });
 
+  const [walletAmount, setWalletAmount] = useState('');
+  const [walletLoading, setWalletLoading] = useState(false);
+
   // Approved vendors for assignments list (users where role = 'vendor' & status = 'active')
   const approvedVendors = users.filter(u => u.role === 'vendor' && u.status === 'active');
 
@@ -155,11 +167,12 @@ export function AdminDashboard({
     { id: 'admins', label: 'Administrators', icon: ShieldCheck, show: isSuperAdmin },
     { id: 'vendors', label: 'Vendor Partners', icon: Building, show: userData?.role === 'admin' },
     { id: 'coupons', label: 'Coupons', icon: Percent, show: isSuperAdmin },
+    { id: 'page-builder', label: 'Page Builder', icon: Layers, show: isSuperAdmin || isCategoryAdmin },
     { id: 'storefront', label: 'Banners', icon: FileImage, show: isSuperAdmin || isCategoryAdmin },
     { id: 'ui-cards', label: 'Site Cards', icon: Layers, show: isSuperAdmin },
     { id: 'videos', label: 'Spotlight Videos', icon: Film, show: isSuperAdmin || isCategoryAdmin },
-    { id: 'carts', label: 'User Carts', icon: ShoppingCart, show: isSuperAdmin },
-    { id: 'wishlists', label: 'Wishlists', icon: Heart, show: isSuperAdmin }
+    { id: 'locations', label: 'Visitor Locations', icon: MapPin, show: isSuperAdmin },
+    { id: 'reviews', label: 'Product Reviews', icon: MessageSquare, show: userData?.role === 'admin' }
   ].filter(t => t.show);
 
   // -------------------------------------------------------------
@@ -243,6 +256,9 @@ export function AdminDashboard({
       originalPrice: productForm.originalPrice ? parseFloat(productForm.originalPrice) : null,
       category: productForm.category,
       image: productForm.image,
+      images: Array.isArray(productForm.images) ? productForm.images.map(s => s.trim()).filter(Boolean) : [],
+      return_policy: productForm.returnPolicy,
+      delivery_days: parseInt(productForm.deliveryDays) || 3,
       stock: parseInt(productForm.stock) || 0,
       description: productForm.description,
       badge: productForm.badge
@@ -285,6 +301,9 @@ export function AdminDashboard({
         originalPrice: '',
         category: isCategoryAdmin ? adminCategory : 'real-estate',
         image: '',
+        images: [],
+        returnPolicy: '7 Days Replacement',
+        deliveryDays: '3',
         stock: '',
         description: '',
         badge: ''
@@ -304,6 +323,9 @@ export function AdminDashboard({
       originalPrice: p.originalPrice ? p.originalPrice.toString() : '',
       category: p.category,
       image: p.image || '',
+      images: p.images ? (typeof p.images === 'string' && p.images.startsWith('[') ? JSON.parse(p.images) : p.images.split(',')) : [],
+      returnPolicy: p.return_policy || '7 Days Replacement',
+      deliveryDays: p.delivery_days ? p.delivery_days.toString() : '3',
       stock: (p.stock ?? 0).toString(),
       description: p.description || '',
       badge: p.badge || ''
@@ -332,33 +354,35 @@ export function AdminDashboard({
 
   const handleToggleStatus = async (entity, id, currentStatus) => {
     const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    try {
-      const res = await fetch(`${API_URL}/admin/${entity}/${id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: nextStatus })
-      });
+    showConfirm(`Are you sure you want to change status to ${nextStatus}?`, async () => {
+      try {
+        const res = await fetch(`${API_URL}/admin/${entity}/${id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: nextStatus })
+        });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update status');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update status');
 
-      showToast(data.message || `Status updated to ${nextStatus}`, 'success');
-      
-      // Update specific entity without reloading the page
-      switch (entity) {
-        case 'products': refreshProducts && refreshProducts(); break;
-        case 'categories': refreshCategories && refreshCategories(); break;
-        case 'banners': refreshBanners && refreshBanners(); break;
-        case 'videos': refreshVideos && refreshVideos(); break;
-        case 'coupons': refreshCoupons && refreshCoupons(); break;
-        case 'ui-cards': refreshUiCards && refreshUiCards(); break;
+        showToast(data.message || `Status updated to ${nextStatus}`, 'success');
+        
+        // Update specific entity without reloading the page
+        switch (entity) {
+          case 'products': refreshProducts && refreshProducts(); break;
+          case 'categories': refreshCategories && refreshCategories(); break;
+          case 'banners': refreshBanners && refreshBanners(); break;
+          case 'videos': refreshVideos && refreshVideos(); break;
+          case 'coupons': refreshCoupons && refreshCoupons(); break;
+          case 'ui-cards': refreshUiCards && refreshUiCards(); break;
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
       }
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
+    });
   };
 
   const handleOrderStatusChange = async (orderId, newStatus) => {
@@ -403,6 +427,27 @@ export function AdminDashboard({
     }
   };
 
+  const handleDeliveryDateUpdate = async (orderId, deliveryDate) => {
+    try {
+      const res = await fetch(`${API_URL}/orders/${orderId}/delivery-date`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ expectedDeliveryDate: deliveryDate })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update delivery date');
+
+      showToast('Expected delivery date updated', 'success');
+      refreshOrders();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleAssignOrder = async (orderId, vendorId) => {
     if (!vendorId) return;
     try {
@@ -427,24 +472,26 @@ export function AdminDashboard({
 
   const handleToggleUserStatus = async (userId, currentStatus) => {
     const nextStatus = currentStatus === 'active' ? 'disabled' : 'active';
-    try {
-      const res = await fetch(`${API_URL}/users/${userId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: nextStatus })
-      });
+    showConfirm(`Are you sure you want to change the user's status to ${nextStatus}?`, async () => {
+      try {
+        const res = await fetch(`${API_URL}/users/${userId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: nextStatus })
+        });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update status');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update status');
 
-      showToast(data.message || `User status updated to ${nextStatus}`, 'success');
-      refreshUsers();
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
+        showToast(data.message || `User status updated to ${nextStatus}`, 'success');
+        refreshUsers();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
   };
 
   const handleUserRoleChange = async (userId, newRole, managedCategory) => {
@@ -565,10 +612,10 @@ export function AdminDashboard({
     <div className="flex h-screen w-screen bg-gray-100 overflow-hidden font-sans">
       
       {/* 1. Left Sidebar Navigation */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between shrink-0 border-r border-slate-800 shadow-xl relative z-20">
-        <div>
+      <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between shrink-0 border-r border-slate-800 shadow-xl relative z-20 overflow-hidden h-screen">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Logo / Portal Branding */}
-          <div className="p-6 border-b border-slate-800">
+          <div className="shrink-0 p-6 border-b border-slate-800">
             <h1 className="text-xl font-extrabold bg-gradient-to-r from-purple-400 to-indigo-400 bg-clip-text text-transparent tracking-wider">
               YALI {isVendor ? 'Vendor' : 'Console'}
             </h1>
@@ -576,7 +623,7 @@ export function AdminDashboard({
           </div>
 
           {/* User Profile Info Card */}
-          <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/20">
+          <div className="shrink-0 px-6 py-4 border-b border-slate-800 bg-slate-950/20">
             <div className="font-semibold truncate text-slate-200 text-sm">{userData?.name}</div>
             <div className="text-[10px] text-purple-400 font-bold capitalize mt-0.5 tracking-wide">{userData?.role} Partner</div>
             {isCategoryAdmin && (
@@ -675,6 +722,10 @@ export function AdminDashboard({
               />
             } />
 
+            <Route path="/admin/reviews" element={
+              <ReviewsTab />
+            } />
+
             <Route path="/admin/products" element={
               <ProductsTab
                 filteredProducts={filteredProducts}
@@ -723,6 +774,7 @@ export function AdminDashboard({
                 handleOrderStatusChange={handleOrderStatusChange}
                 handleAssignOrder={handleAssignOrder}
                 handleTrackingUpdate={handleTrackingUpdate}
+                handleDeliveryDateUpdate={handleDeliveryDateUpdate}
               />
             } />
 
@@ -757,6 +809,8 @@ export function AdminDashboard({
                   handleToggleUserStatus={handleToggleUserStatus}
                   refreshUsers={refreshUsers}
                   token={token}
+                  categoriesList={categoriesList}
+                  handleUserRoleChange={handleUserRoleChange}
                 />
               } />
             )}
@@ -814,6 +868,12 @@ export function AdminDashboard({
               } />
             )}
 
+            {(isSuperAdmin || isCategoryAdmin) && (
+              <Route path="/admin/page-builder" element={
+                <PageBuilderTab token={token} />
+              } />
+            )}
+
             {isSuperAdmin && (
               <Route path="/admin/carts" element={
                 <CartsTab token={token} showToast={showToast} />
@@ -823,6 +883,12 @@ export function AdminDashboard({
             {isSuperAdmin && (
               <Route path="/admin/wishlists" element={
                 <WishlistsTab token={token} showToast={showToast} />
+              } />
+            )}
+
+            {isSuperAdmin && (
+              <Route path="/admin/locations" element={
+                <LocationsTab token={token} />
               } />
             )}
             
@@ -914,7 +980,7 @@ export function AdminDashboard({
                 </div>
               </div>
               <FileUploadInput
-                label="Product Image"
+                label="Main Product Image"
                 type="image"
                 value={productForm.image}
                 onChange={(url) => setProductForm({ ...productForm, image: url })}
@@ -922,6 +988,56 @@ export function AdminDashboard({
                 placeholder="https://images.unsplash.com/photo-..."
                 token={token}
               />
+              <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <div className="flex justify-between items-center">
+                  <label className="block text-sm font-bold text-gray-700">Gallery Images (Slider)</label>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      const currentImages = Array.isArray(productForm.images) ? productForm.images : [];
+                      setProductForm({ ...productForm, images: [...currentImages, ''] });
+                    }}
+                    className="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-bold hover:bg-purple-200 transition-colors cursor-pointer"
+                  >
+                    + Add Image
+                  </button>
+                </div>
+                {Array.isArray(productForm.images) && productForm.images.map((imgUrl, idx) => (
+                  <div key={idx} className="flex gap-2 items-end bg-white p-3 rounded-lg border border-gray-200 shadow-sm relative group">
+                    <div className="flex-1">
+                      <FileUploadInput
+                        label={`Gallery Image ${idx + 1}`}
+                        type="image"
+                        value={typeof imgUrl === 'string' ? imgUrl.trim() : ''}
+                        onChange={(url) => {
+                          const currentImages = [...productForm.images];
+                          currentImages[idx] = url;
+                          setProductForm({ ...productForm, images: currentImages });
+                        }}
+                        accept="image/*"
+                        token={token}
+                      />
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const currentImages = [...productForm.images];
+                        currentImages.splice(idx, 1);
+                        setProductForm({ ...productForm, images: currentImages });
+                      }}
+                      className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors h-fit self-end mb-1 cursor-pointer"
+                      title="Remove image"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                ))}
+                {(!Array.isArray(productForm.images) || productForm.images.length === 0) && (
+                  <div className="text-center py-4 text-xs text-gray-400 border border-dashed border-gray-300 rounded-lg">
+                    No gallery images added yet.
+                  </div>
+                )}
+              </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Badge Tag</label>
                 <input
@@ -931,6 +1047,31 @@ export function AdminDashboard({
                   placeholder="New, Popular, etc."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
                 />
+              </div>
+
+
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Return Policy</label>
+                  <input
+                    type="text"
+                    value={productForm.returnPolicy}
+                    onChange={(e) => setProductForm({ ...productForm, returnPolicy: e.target.value })}
+                    placeholder="e.g. 7 Days Replacement"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Delivery Days</label>
+                  <input
+                    type="number"
+                    value={productForm.deliveryDays}
+                    onChange={(e) => setProductForm({ ...productForm, deliveryDays: e.target.value })}
+                    placeholder="e.g. 3"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 text-sm"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Product Description</label>

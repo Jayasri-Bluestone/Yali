@@ -6,7 +6,8 @@ import { formatINR } from '../utils/currency';
 export function CartPage({
   items,
   onUpdateQuantity,
-  onRemoveItem
+  onRemoveItem,
+  onProceedToCheckout
 }) {
   const navigate = useNavigate();
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -119,7 +120,7 @@ export function CartPage({
                 </div>
                 
                 <button
-                  onClick={() => navigate('/checkout')}
+                  onClick={() => onProceedToCheckout(items)}
                   className="w-full py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-black text-lg hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer">
                   Proceed to Checkout
                 </button>

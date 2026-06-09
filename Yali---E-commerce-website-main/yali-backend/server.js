@@ -13,11 +13,23 @@ const { pool, initDB } = require('./db');
 const { sendOrderConfirmation, sendVendorNotification, sendStatusUpdateNotification } = require('./mail');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5010;
 const JWT_SECRET = process.env.JWT_SECRET || 'yali_super_secure_secret_key_2026';
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: ['https://springgreen-badger-965556.hostingersite.com', 'http://localhost:5173']
+}));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Fix for Hostinger Nginx proxy stripping the /yali_api prefix
+app.use((req, res, next) => {
+  // If the request doesn't start with /yali_api and doesn't start with /uploads, prepend /yali_api
+  if (!req.url.startsWith('/yali_api') && !req.url.startsWith('/uploads')) {
+    req.url = '/yali_api' + req.url;
+  }
+  next();
+});
+
 
 // Serve uploaded files as static assets
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -61,6 +73,7 @@ function authenticateToken(req, res, next) {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
+      console.error('[AUTH] Token error:', err.message);
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
     req.user = user;
@@ -73,7 +86,7 @@ function authenticateToken(req, res, next) {
 // -------------------------------------------------------------
 
 // Generic file upload for images and videos
-app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/yali_api/upload', authenticateToken, upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -103,7 +116,7 @@ app.use((err, req, res, next) => {
 // -------------------------------------------------------------
 
 // Register Route
-app.post('/api/auth/register', async (req, res) => {
+app.post('/yali_api/auth/register', async (req, res) => {
   const { name, email, phone, password, role, companyName, storeDescription, taxId } = req.body;
 
   if (!name || !email || !password) {
@@ -158,7 +171,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // Login Route
-app.post('/api/auth/login', async (req, res) => {
+app.post('/yali_api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -219,7 +232,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Google OAuth Route
-app.post('/api/auth/google', async (req, res) => {
+app.post('/yali_api/auth/google', async (req, res) => {
   const { accessToken } = req.body;
   if (!accessToken) return res.status(400).json({ error: 'No access token provided' });
 
@@ -272,7 +285,7 @@ app.post('/api/auth/google', async (req, res) => {
 });
 
 // Facebook OAuth Route
-app.post('/api/auth/facebook', async (req, res) => {
+app.post('/yali_api/auth/facebook', async (req, res) => {
   const { accessToken } = req.body;
   if (!accessToken) return res.status(400).json({ error: 'No access token provided' });
 
@@ -324,7 +337,7 @@ app.post('/api/auth/facebook', async (req, res) => {
 });
 
 // Get Profile details
-app.get('/api/auth/me', authenticateToken, async (req, res) => {
+app.get('/yali_api/auth/me', authenticateToken, async (req, res) => {
   try {
     const [users] = await pool.query('SELECT id, name, email, phone, wallet, role, status, managed_category FROM users WHERE id = ?', [req.user.id]);
     if (users.length === 0) {
@@ -360,7 +373,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Fetch Categories
-app.get('/api/categories', async (req, res) => {
+app.get('/yali_api/categories', async (req, res) => {
   const { all } = req.query;
   let sql = 'SELECT * FROM categories';
   if (!all) sql += ' WHERE status = "active"';
@@ -374,7 +387,7 @@ app.get('/api/categories', async (req, res) => {
 });
 
 // Create Category
-app.post('/api/categories', authenticateToken, async (req, res) => {
+app.post('/yali_api/categories', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   const { value, label, icon, color_gradient } = req.body;
   try {
@@ -393,7 +406,7 @@ app.post('/api/categories', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Fetch all products
-app.get('/api/products', async (req, res) => {
+app.get('/yali_api/products', async (req, res) => {
   const { category, q, vendor_id, all } = req.query;
   
   let sql = 'SELECT * FROM products WHERE 1=1';
@@ -436,7 +449,7 @@ app.get('/api/products', async (req, res) => {
 });
 
 // Single Product details
-app.get('/api/products/:id', async (req, res) => {
+app.get('/yali_api/products/:id', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM products WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Product not found' });
@@ -454,19 +467,19 @@ app.get('/api/products/:id', async (req, res) => {
 });
 
 // Create Product
-app.post('/api/products', authenticateToken, async (req, res) => {
+app.post('/yali_api/products', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'vendor') {
     return res.status(403).json({ error: 'Unauthorized access' });
   }
 
-  const { name, description, price, originalPrice, image, stock, badge, category, unique_id } = req.body;
+  const { name, description, price, originalPrice, image, stock, badge, category, unique_id, images, return_policy, delivery_days } = req.body;
 
   if (!name || !price || !category) {
     return res.status(400).json({ error: 'Product name, price, and category are required' });
   }
 
-  // Category restriction check for Admins
-  if (req.user.role === 'admin' && req.user.managed_category && req.user.managed_category !== 'all') {
+  // Category restriction check for Admins and Vendors
+  if (req.user.managed_category && req.user.managed_category !== 'all') {
     if (req.user.managed_category !== category) {
       return res.status(403).json({ error: `Unauthorized: You can only create products in the '${req.user.managed_category}' category.` });
     }
@@ -476,7 +489,7 @@ app.post('/api/products', authenticateToken, async (req, res) => {
 
   try {
     const [result] = await pool.query(
-      'INSERT INTO products (unique_id, name, description, price, original_price, image, stock, badge, category, vendor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO products (unique_id, name, description, price, original_price, image, stock, badge, category, vendor_id, images, return_policy, delivery_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         unique_id || null,
         name,
@@ -487,7 +500,10 @@ app.post('/api/products', authenticateToken, async (req, res) => {
         parseInt(stock) || 0,
         badge || null,
         category,
-        vendorId
+        vendorId,
+        images ? JSON.stringify(images) : null,
+        return_policy || '7 Days Replacement',
+        delivery_days ? parseInt(delivery_days) : 3
       ]
     );
 
@@ -514,13 +530,13 @@ app.post('/api/products', authenticateToken, async (req, res) => {
 });
 
 // Update Product
-app.put('/api/products/:id', authenticateToken, async (req, res) => {
+app.put('/yali_api/products/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'vendor') {
     return res.status(403).json({ error: 'Unauthorized' });
   }
 
   const productId = req.params.id;
-  const { name, description, price, originalPrice, image, stock, badge, category, unique_id } = req.body;
+  const { name, description, price, originalPrice, image, stock, badge, category, unique_id, images, return_policy, delivery_days } = req.body;
 
   try {
     const [existing] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
@@ -533,14 +549,15 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized: You do not own this product' });
     }
 
-    if (req.user.role === 'admin' && req.user.managed_category && req.user.managed_category !== 'all') {
-      if (req.user.managed_category !== prod.category || req.user.managed_category !== category) {
+    // Admin/Vendor category restriction
+    if (req.user.managed_category && req.user.managed_category !== 'all') {
+      if (req.user.managed_category !== prod.category || (category && req.user.managed_category !== category)) {
         return res.status(403).json({ error: `Unauthorized: You can only edit items in the '${req.user.managed_category}' category.` });
       }
     }
 
     await pool.query(
-      'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, image = ?, stock = ?, badge = ?, category = ?, unique_id = ? WHERE id = ?',
+      'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, image = ?, stock = ?, badge = ?, category = ?, unique_id = ?, images = ?, return_policy = ?, delivery_days = ? WHERE id = ?',
       [
         name || prod.name,
         description !== undefined ? description : prod.description,
@@ -551,6 +568,9 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
         badge !== undefined ? badge : prod.badge,
         category || prod.category,
         unique_id !== undefined ? unique_id : prod.unique_id,
+        images !== undefined ? (images ? JSON.stringify(images) : null) : prod.images,
+        return_policy !== undefined ? return_policy : prod.return_policy,
+        delivery_days !== undefined ? parseInt(delivery_days) : prod.delivery_days,
         productId
       ]
     );
@@ -563,7 +583,7 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete Product
-app.delete('/api/products/:id', authenticateToken, async (req, res) => {
+app.delete('/yali_api/products/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'vendor') {
     return res.status(403).json({ error: 'Unauthorized' });
   }
@@ -580,7 +600,8 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized: You do not own this product' });
     }
 
-    if (req.user.role === 'admin' && req.user.managed_category && req.user.managed_category !== 'all') {
+    // Admin/Vendor category restriction
+    if (req.user.managed_category && req.user.managed_category !== 'all') {
       if (req.user.managed_category !== prod.category) {
         return res.status(403).json({ error: `Unauthorized: You can only manage items in the '${req.user.managed_category}' category.` });
       }
@@ -595,7 +616,7 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
 });
 
 // Bulk Import Products
-app.post('/api/products/import', authenticateToken, async (req, res) => {
+app.post('/yali_api/products/import', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only access' });
   }
@@ -653,7 +674,7 @@ app.post('/api/products/import', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Place an Order
-app.post('/api/orders', authenticateToken, async (req, res) => {
+app.post('/yali_api/orders', authenticateToken, async (req, res) => {
   const { address, paymentMethod, items, subtotal, tax, shipping, discount, total, appliedCoupon } = req.body;
 
   if (!items || items.length === 0 || !address || !paymentMethod) {
@@ -784,7 +805,7 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
 });
 
 // Fetch user orders list (depending on scopes)
-app.get('/api/orders', authenticateToken, async (req, res) => {
+app.get('/yali_api/orders', authenticateToken, async (req, res) => {
   try {
     let sql = 'SELECT * FROM orders';
     const params = [];
@@ -833,7 +854,7 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 });
 
 // Admin assign order to vendor
-app.put('/api/orders/:id/assign', authenticateToken, async (req, res) => {
+app.put('/yali_api/orders/:id/assign', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin authorization required' });
   }
@@ -882,7 +903,7 @@ app.put('/api/orders/:id/assign', authenticateToken, async (req, res) => {
 });
 
 // Update Order status
-app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
+app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
   const orderId = req.params.id;
   const { status } = req.body;
 
@@ -897,9 +918,10 @@ app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized: This order is not assigned to you' });
     }
 
-    if (req.user.role === 'admin' && req.user.managed_category && req.user.managed_category !== 'all') {
+    // Check if user is restricted by category
+    if (req.user.managed_category && req.user.managed_category !== 'all') {
       if (req.user.managed_category !== order.category) {
-        return res.status(403).json({ error: 'Unauthorized order category scope access' });
+        return res.status(403).json({ error: `Unauthorized: You can only manage orders for '${req.user.managed_category}'.` });
       }
     }
 
@@ -936,7 +958,7 @@ app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
 });
 
 // Update Order tracking number
-app.put('/api/orders/:id/tracking', authenticateToken, async (req, res) => {
+app.put('/yali_api/orders/:id/tracking', authenticateToken, async (req, res) => {
   const orderId = req.params.id;
   const { trackingNumber } = req.body;
 
@@ -958,6 +980,29 @@ app.put('/api/orders/:id/tracking', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+// Update Order expected delivery date
+app.put('/yali_api/orders/:id/delivery-date', authenticateToken, async (req, res) => {
+  const orderId = req.params.id;
+  const { expectedDeliveryDate } = req.body;
+
+  try {
+    const [orders] = await pool.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
+
+    const order = orders[0];
+
+    // Authorization checks
+    if (req.user.role === 'vendor' && order.assigned_vendor_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized order details access' });
+    }
+
+    await pool.query('UPDATE orders SET expected_delivery_date = ? WHERE order_id = ?', [expectedDeliveryDate || null, orderId]);
+
+    res.json({ message: 'Expected delivery date updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 
 // -------------------------------------------------------------
@@ -965,7 +1010,7 @@ app.put('/api/orders/:id/tracking', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Fetch all users list
-app.get('/api/users', authenticateToken, async (req, res) => {
+app.get('/yali_api/users', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only access' });
   }
@@ -1004,7 +1049,7 @@ app.get('/api/users', authenticateToken, async (req, res) => {
 });
 
 // Update user role
-app.put('/api/users/:id/role', authenticateToken, async (req, res) => {
+app.put('/yali_api/users/:id/role', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   const userId = req.params.id;
@@ -1019,7 +1064,7 @@ app.put('/api/users/:id/role', authenticateToken, async (req, res) => {
 });
 
 // Toggle user activation status / vendor approval status
-app.put('/api/users/:id/status', authenticateToken, async (req, res) => {
+app.put('/yali_api/users/:id/status', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   const userId = req.params.id;
@@ -1062,7 +1107,7 @@ app.put('/api/users/:id/status', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Fetch coupons
-app.get('/api/coupons', async (req, res) => {
+app.get('/yali_api/coupons', async (req, res) => {
   const { all } = req.query;
   try {
     let sql = 'SELECT * FROM coupons';
@@ -1080,7 +1125,7 @@ app.get('/api/coupons', async (req, res) => {
 });
 
 // Create Coupon
-app.post('/api/coupons', authenticateToken, async (req, res) => {
+app.post('/yali_api/coupons', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   const { code, type, value, minOrder, expiry } = req.body;
@@ -1102,7 +1147,7 @@ app.post('/api/coupons', authenticateToken, async (req, res) => {
 });
 
 // Delete Coupon
-app.delete('/api/coupons/:code', authenticateToken, async (req, res) => {
+app.delete('/yali_api/coupons/:code', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   
   try {
@@ -1114,7 +1159,7 @@ app.delete('/api/coupons/:code', authenticateToken, async (req, res) => {
 });
 
 // Update Coupon
-app.put('/api/coupons/:code', authenticateToken, async (req, res) => {
+app.put('/yali_api/coupons/:code', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   
   const originalCode = req.params.code;
@@ -1142,7 +1187,7 @@ app.put('/api/coupons/:code', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Fetch Banners
-app.get('/api/banners', async (req, res) => {
+app.get('/yali_api/banners', async (req, res) => {
   const { all } = req.query;
   try {
     let sql = 'SELECT * FROM banners';
@@ -1159,7 +1204,7 @@ app.get('/api/banners', async (req, res) => {
 });
 
 // Update Banner
-app.put('/api/banners/:id', authenticateToken, async (req, res) => {
+app.put('/yali_api/banners/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   const bannerId = req.params.id;
@@ -1199,7 +1244,7 @@ app.put('/api/banners/:id', authenticateToken, async (req, res) => {
 });
 
 // Create Banner
-app.post('/api/banners', authenticateToken, async (req, res) => {
+app.post('/yali_api/banners', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   const { title, subtitle, cta, discount, bgImage, gradient, category } = req.body;
@@ -1233,7 +1278,7 @@ app.post('/api/banners', authenticateToken, async (req, res) => {
 });
 
 // Delete Banner
-app.delete('/api/banners/:id', authenticateToken, async (req, res) => {
+app.delete('/yali_api/banners/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   try {
@@ -1261,7 +1306,7 @@ app.delete('/api/banners/:id', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Fetch Videos
-app.get('/api/videos', async (req, res) => {
+app.get('/yali_api/videos', async (req, res) => {
   const { category, all } = req.query;
   let sql = 'SELECT * FROM videos WHERE 1=1';
   const params = [];
@@ -1294,7 +1339,7 @@ app.get('/api/videos', async (req, res) => {
 });
 
 // Create Video
-app.post('/api/videos', authenticateToken, async (req, res) => {
+app.post('/yali_api/videos', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   const { title, shortTitle, desc, url, duration, category } = req.body;
@@ -1323,7 +1368,7 @@ app.post('/api/videos', authenticateToken, async (req, res) => {
 });
 
 // Update Video
-app.put('/api/videos/:id', authenticateToken, async (req, res) => {
+app.put('/yali_api/videos/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   const videoId = req.params.id;
@@ -1363,7 +1408,7 @@ app.put('/api/videos/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete Video
-app.delete('/api/videos/:id', authenticateToken, async (req, res) => {
+app.delete('/yali_api/videos/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
   const videoId = req.params.id;
@@ -1395,7 +1440,7 @@ app.delete('/api/videos/:id', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Add money to Wallet
-app.post('/api/wallet/add-money', authenticateToken, async (req, res) => {
+app.post('/yali_api/wallet/add-money', authenticateToken, async (req, res) => {
   const { amount } = req.body;
   if (!amount || parseFloat(amount) <= 0) {
     return res.status(400).json({ error: 'Invalid deposit amount' });
@@ -1438,7 +1483,7 @@ app.post('/api/wallet/add-money', authenticateToken, async (req, res) => {
 });
 
 // Fetch transactions history log
-app.get('/api/wallet/transactions', authenticateToken, async (req, res) => {
+app.get('/yali_api/wallet/transactions', authenticateToken, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM wallet_transactions WHERE user_id = ? ORDER BY date DESC', [req.user.id]);
     const txns = rows.map(r => ({
@@ -1461,7 +1506,7 @@ app.get('/api/wallet/transactions', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Fetch active UI cards (public)
-app.get('/api/ui-cards', async (req, res) => {
+app.get('/yali_api/ui-cards', async (req, res) => {
   const { all } = req.query;
   try {
     let sql = 'SELECT * FROM ui_cards';
@@ -1475,7 +1520,7 @@ app.get('/api/ui-cards', async (req, res) => {
 });
 
 // Admin fetch all UI cards
-app.get('/api/admin/ui-cards', authenticateToken, async (req, res) => {
+app.get('/yali_api/admin/ui-cards', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Unauthorized' });
   }
@@ -1489,7 +1534,7 @@ app.get('/api/admin/ui-cards', authenticateToken, async (req, res) => {
 });
 
 // Create UI card
-app.post('/api/ui-cards', authenticateToken, async (req, res) => {
+app.post('/yali_api/ui-cards', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   const { section, title, subtitle, icon, image_url, link_url, color_gradient, status } = req.body;
   try {
@@ -1505,7 +1550,7 @@ app.post('/api/ui-cards', authenticateToken, async (req, res) => {
 });
 
 // Update UI card
-app.put('/api/ui-cards/:id', authenticateToken, async (req, res) => {
+app.put('/yali_api/ui-cards/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   const { section, title, subtitle, icon, image_url, link_url, color_gradient, status } = req.body;
   try {
@@ -1521,7 +1566,7 @@ app.put('/api/ui-cards/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete UI card
-app.delete('/api/ui-cards/:id', authenticateToken, async (req, res) => {
+app.delete('/yali_api/ui-cards/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
     await pool.query('DELETE FROM ui_cards WHERE id=?', [req.params.id]);
@@ -1536,7 +1581,7 @@ app.delete('/api/ui-cards/:id', authenticateToken, async (req, res) => {
 // 🔄 UNIFIED STATUS TOGGLE
 // -------------------------------------------------------------
 
-app.patch('/api/admin/:entity/:id/status', authenticateToken, async (req, res) => {
+app.patch('/yali_api/admin/:entity/:id/status', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
   
   const { entity, id } = req.params;
@@ -1571,7 +1616,7 @@ app.patch('/api/admin/:entity/:id/status', authenticateToken, async (req, res) =
 // -------------------------------------------------------------
 
 // Get user's cart
-app.get('/api/cart', authenticateToken, async (req, res) => {
+app.get('/yali_api/cart', authenticateToken, async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT ci.id, ci.user_id, ci.product_id, ci.selected_variant, ci.quantity, ci.created_at,
@@ -1589,7 +1634,7 @@ app.get('/api/cart', authenticateToken, async (req, res) => {
 });
 
 // Add item to cart
-app.post('/api/cart', authenticateToken, async (req, res) => {
+app.post('/yali_api/cart', authenticateToken, async (req, res) => {
   const { product_id, selected_variant, quantity } = req.body;
   if (!product_id) return res.status(400).json({ error: 'Product ID is required' });
 
@@ -1619,7 +1664,7 @@ app.post('/api/cart', authenticateToken, async (req, res) => {
 });
 
 // Update cart item quantity
-app.put('/api/cart/:id', authenticateToken, async (req, res) => {
+app.put('/yali_api/cart/:id', authenticateToken, async (req, res) => {
   const { quantity } = req.body;
   if (!quantity || quantity < 1) return res.status(400).json({ error: 'Valid quantity required' });
 
@@ -1636,7 +1681,7 @@ app.put('/api/cart/:id', authenticateToken, async (req, res) => {
 });
 
 // Remove item from cart
-app.delete('/api/cart/:id', authenticateToken, async (req, res) => {
+app.delete('/yali_api/cart/:id', authenticateToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM cart_items WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     res.json({ message: 'Removed from cart' });
@@ -1647,7 +1692,7 @@ app.delete('/api/cart/:id', authenticateToken, async (req, res) => {
 });
 
 // Clear entire cart
-app.delete('/api/cart', authenticateToken, async (req, res) => {
+app.delete('/yali_api/cart', authenticateToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM cart_items WHERE user_id = ?', [req.user.id]);
     res.json({ message: 'Cart cleared' });
@@ -1658,7 +1703,7 @@ app.delete('/api/cart', authenticateToken, async (req, res) => {
 });
 
 // Admin: Get all cart items (all users)
-app.get('/api/admin/carts', authenticateToken, async (req, res) => {
+app.get('/yali_api/admin/carts', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
     const [rows] = await pool.query(`
@@ -1678,7 +1723,7 @@ app.get('/api/admin/carts', authenticateToken, async (req, res) => {
 });
 
 // Admin: Remove a specific cart item
-app.delete('/api/admin/carts/:id', authenticateToken, async (req, res) => {
+app.delete('/yali_api/admin/carts/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
     await pool.query('DELETE FROM cart_items WHERE id = ?', [req.params.id]);
@@ -1694,7 +1739,7 @@ app.delete('/api/admin/carts/:id', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 
 // Get user's wishlist
-app.get('/api/wishlist', authenticateToken, async (req, res) => {
+app.get('/yali_api/wishlist', authenticateToken, async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT w.id, w.user_id, w.product_id, w.created_at,
@@ -1712,7 +1757,7 @@ app.get('/api/wishlist', authenticateToken, async (req, res) => {
 });
 
 // Add/Toggle wishlist item
-app.post('/api/wishlist', authenticateToken, async (req, res) => {
+app.post('/yali_api/wishlist', authenticateToken, async (req, res) => {
   const { product_id } = req.body;
   if (!product_id) return res.status(400).json({ error: 'Product ID is required' });
 
@@ -1739,7 +1784,7 @@ app.post('/api/wishlist', authenticateToken, async (req, res) => {
 });
 
 // Remove from wishlist
-app.delete('/api/wishlist/:id', authenticateToken, async (req, res) => {
+app.delete('/yali_api/wishlist/:id', authenticateToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM wishlist WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     res.json({ message: 'Removed from wishlist' });
@@ -1750,7 +1795,7 @@ app.delete('/api/wishlist/:id', authenticateToken, async (req, res) => {
 });
 
 // Admin: Get all wishlist items (all users)
-app.get('/api/admin/wishlists', authenticateToken, async (req, res) => {
+app.get('/yali_api/admin/wishlists', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
     const [rows] = await pool.query(`
@@ -1770,13 +1815,307 @@ app.get('/api/admin/wishlists', authenticateToken, async (req, res) => {
 });
 
 // Admin: Remove a specific wishlist item
-app.delete('/api/admin/wishlists/:id', authenticateToken, async (req, res) => {
+app.delete('/yali_api/admin/wishlists/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
     await pool.query('DELETE FROM wishlist WHERE id = ?', [req.params.id]);
     res.json({ message: 'Wishlist item removed' });
   } catch (error) {
     console.error('Admin remove wishlist item error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// VISITOR LOCATIONS (Anyone entering site)
+// -------------------------------------------------------------
+
+// Record a visitor's location
+app.post('/yali_api/locations', async (req, res) => {
+  const { session_id, latitude, longitude, city, country } = req.body;
+  if (!session_id || latitude === undefined || longitude === undefined) {
+    return res.status(400).json({ error: 'Missing required location data' });
+  }
+
+  try {
+    // Check if session already recorded to prevent spam
+    const [existing] = await pool.query('SELECT id FROM visitor_locations WHERE session_id = ?', [session_id]);
+    if (existing.length > 0) {
+      return res.status(200).json({ message: 'Location already recorded for this session' });
+    }
+
+    await pool.query(
+      'INSERT INTO visitor_locations (session_id, latitude, longitude, city, country) VALUES (?, ?, ?, ?, ?)',
+      [session_id, latitude, longitude, city || null, country || null]
+    );
+    res.status(201).json({ message: 'Location recorded successfully' });
+  } catch (error) {
+    console.error('Record location error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Get all visitor locations
+app.get('/yali_api/admin/locations', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const [rows] = await pool.query('SELECT * FROM visitor_locations ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Admin get locations error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// PRODUCT REVIEWS ROUTES
+// -------------------------------------------------------------
+
+// Get approved reviews for a product
+app.get('/yali_api/products/:id/reviews', async (req, res) => {
+  try {
+    const [reviews] = await pool.query(
+      "SELECT * FROM product_reviews WHERE product_id = ? AND status = 'approved' ORDER BY created_at DESC", 
+      [req.params.id]
+    );
+    const parsedReviews = reviews.map(r => {
+      let mediaArray = [];
+      if (typeof r.media === 'string') {
+        try {
+          mediaArray = JSON.parse(r.media);
+        } catch (e) {
+          console.warn(`[WARNING] Failed to parse media for review ${r.id}, it might be truncated.`);
+        }
+      } else if (r.media) {
+        mediaArray = r.media;
+      }
+      return { ...r, media: mediaArray };
+    });
+    res.json(parsedReviews);
+  } catch (error) {
+    console.error('[GET REVIEWS ERROR]:', error);
+    res.status(500).json({ error: error.message || 'Server error fetching reviews' });
+  }
+});
+
+// Submit a review for a product
+app.post('/yali_api/products/:id/reviews', authenticateToken, async (req, res) => {
+  const { rating, comment, media } = req.body;
+  if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Valid rating (1-5) is required' });
+
+  try {
+    // Check if product exists
+    const [products] = await pool.query('SELECT * FROM products WHERE id = ?', [req.params.id]);
+    if (products.length === 0) return res.status(404).json({ error: 'Product not found' });
+
+    // Check if user already reviewed
+    const [existing] = await pool.query('SELECT * FROM product_reviews WHERE product_id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (existing.length > 0) return res.status(409).json({ error: 'You have already reviewed this product' });
+
+    await pool.query(
+      "INSERT INTO product_reviews (product_id, user_id, author_name, rating, comment, media, status) VALUES (?, ?, ?, ?, ?, ?, 'approved')",
+      [req.params.id, req.user.id, req.user.name, rating, comment || '', media ? JSON.stringify(media) : null]
+    );
+
+    res.status(201).json({ message: 'Review submitted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error submitting review' });
+  }
+});
+
+// Admin: Get all reviews
+app.get('/yali_api/admin/reviews', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+    console.error(`[Admin Reviews GET] 403 Forbidden. User role is: ${req.user.role}`);
+    return res.status(403).json({ error: 'Unauthorized: Admins only' });
+  }
+  try {
+    const [reviews] = await pool.query(`
+      SELECT pr.*, p.name as product_name 
+      FROM product_reviews pr 
+      JOIN products p ON pr.product_id = p.id 
+      ORDER BY pr.created_at DESC
+    `);
+    const parsedReviews = reviews.map(r => {
+      let mediaArray = [];
+      if (typeof r.media === 'string') {
+        try {
+          mediaArray = JSON.parse(r.media);
+        } catch (e) {
+          console.warn(`[WARNING] Failed to parse media for admin review ${r.id}, it might be truncated.`);
+        }
+      } else if (r.media) {
+        mediaArray = r.media;
+      }
+      return { ...r, media: mediaArray };
+    });
+    res.json(parsedReviews);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Update review status
+app.put('/yali_api/admin/reviews/:id/status', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+    console.error(`[Admin Reviews PUT] 403 Forbidden. User role is: ${req.user.role}`);
+    return res.status(403).json({ error: 'Unauthorized: Admins only' });
+  }
+  try {
+    await pool.query('UPDATE product_reviews SET status = ? WHERE id = ?', [req.body.status, req.params.id]);
+    res.json({ message: 'Status updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Delete review
+app.delete('/yali_api/admin/reviews/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+    console.error(`[Admin Reviews DELETE] 403 Forbidden. User role is: ${req.user.role}`);
+    return res.status(403).json({ error: 'Unauthorized: Admins only' });
+  }
+  try {
+    await pool.query('DELETE FROM product_reviews WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Review deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// 📍 VISITOR LOCATIONS ROUTES
+// -------------------------------------------------------------
+
+// Save visitor location (Public)
+app.post('/yali_api/locations', async (req, res) => {
+  const { session_id, latitude, longitude, city, country } = req.body;
+  if (!session_id || !latitude || !longitude) {
+    return res.status(400).json({ error: 'Missing location data' });
+  }
+  
+  try {
+    const [existing] = await pool.query('SELECT id FROM visitor_locations WHERE session_id = ?', [session_id]);
+    if (existing.length > 0) {
+      await pool.query(
+        'UPDATE visitor_locations SET latitude = ?, longitude = ?, city = ?, country = ? WHERE session_id = ?',
+        [latitude, longitude, city || null, country || null, session_id]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO visitor_locations (session_id, latitude, longitude, city, country) VALUES (?, ?, ?, ?, ?)',
+        [session_id, latitude, longitude, city || null, country || null]
+      );
+    }
+    res.json({ message: 'Location saved' });
+  } catch (error) {
+    console.error('Save location error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin fetch locations
+app.get('/yali_api/admin/locations', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+  try {
+    const [rows] = await pool.query('SELECT * FROM visitor_locations ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch locations error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// 📍 PAGE SECTIONS ROUTES (Dynamic Page Builder)
+// -------------------------------------------------------------
+
+// Get sections for a specific page
+app.get('/yali_api/page-sections/:page_id', async (req, res) => {
+  try {
+    const { page_id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM page_sections WHERE page_id = ? AND status = "active" ORDER BY display_order ASC', [page_id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch page sections error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Get all sections for a page (including inactive)
+app.get('/yali_api/admin/page-sections/:page_id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const { page_id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM page_sections WHERE page_id = ? ORDER BY display_order ASC', [page_id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch page sections admin error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Create section
+app.post('/yali_api/page-sections', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const { page_id, section_type, title, subtitle, display_order, content, status } = req.body;
+    const contentStr = content ? JSON.stringify(content) : null;
+    
+    const [result] = await pool.query(
+      'INSERT INTO page_sections (page_id, section_type, title, subtitle, display_order, content, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [page_id, section_type, title, subtitle, display_order || 0, contentStr, status || 'active']
+    );
+    res.status(201).json({ id: result.insertId, message: 'Section created' });
+  } catch (error) {
+    console.error('Create page section error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Update section
+app.put('/yali_api/page-sections/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const { page_id, section_type, title, subtitle, display_order, content, status } = req.body;
+    const contentStr = content ? JSON.stringify(content) : null;
+    
+    await pool.query(
+      'UPDATE page_sections SET page_id = ?, section_type = ?, title = ?, subtitle = ?, display_order = ?, content = ?, status = ? WHERE id = ?',
+      [page_id, section_type, title, subtitle, display_order, contentStr, status, req.params.id]
+    );
+    res.json({ message: 'Section updated' });
+  } catch (error) {
+    console.error('Update page section error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Delete section
+app.delete('/yali_api/page-sections/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    await pool.query('DELETE FROM page_sections WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Section deleted' });
+  } catch (error) {
+    console.error('Delete page section error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Reorder sections
+app.put('/yali_api/page-sections/reorder/batch', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const { updates } = req.body; // [{ id: 1, display_order: 0 }, { id: 2, display_order: 1 }]
+    for (const update of updates) {
+      await pool.query('UPDATE page_sections SET display_order = ? WHERE id = ?', [update.display_order, update.id]);
+    }
+    res.json({ message: 'Sections reordered' });
+  } catch (error) {
+    console.error('Reorder page sections error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

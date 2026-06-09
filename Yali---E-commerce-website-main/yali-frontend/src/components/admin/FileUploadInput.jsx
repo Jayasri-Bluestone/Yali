@@ -37,22 +37,20 @@ export function FileUploadInput({
     setUploading(true);
     setUploadError('');
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const res = await fetch(`${API_URL}/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Upload failed');
-      onChange(data.url);
-      setMode('url');
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onChange(reader.result);
+        setMode('url');
+        setUploading(false);
+      };
+      reader.onerror = () => {
+        setUploadError('Failed to read file');
+        setUploading(false);
+      };
+      reader.readAsDataURL(file);
     } catch (err) {
       setUploadError(err.message);
-    } finally {
       setUploading(false);
     }
   };

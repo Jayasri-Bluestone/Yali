@@ -522,6 +522,26 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                       <h4 className="font-semibold mb-2">Payment Method</h4>
                       <p className="text-gray-700 capitalize">{paymentMethod.replace('_', ' ')}</p>
                     </div>
+                    <div className="pt-4 border-t border-gray-200">
+                      <h4 className="font-semibold mb-4">Items in your Order</h4>
+                      <div className="space-y-4">
+                        {items.map((item, idx) => (
+                          <div key={idx} className="flex gap-4 p-4 border border-gray-100 rounded-xl bg-gray-50">
+                            <div className="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 p-1">
+                              <img src={item.images?.[0] || item.image || 'https://via.placeholder.com/150'} alt={item.name} className="w-full h-full object-contain" />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-bold text-gray-900 line-clamp-2">{item.name}</h4>
+                              <p className="text-sm text-gray-500 mt-1">Price: {formatINR(item.price)}</p>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-sm font-medium">Qty: {item.quantity}</span>
+                                <span className="font-bold text-[#0066cc]">{formatINR(item.price * item.quantity)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -531,6 +551,26 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
             <div className="lg:col-span-1">
               <div className="bg-white border border-gray-200 rounded-xl p-6 sticky top-6">
                 <h3 className="text-xl font-bold mb-4">Order Summary</h3>
+
+                {/* Items List */}
+                <div className="mb-6 max-h-[300px] overflow-y-auto pr-2 space-y-4">
+                  {items.map((item, idx) => (
+                    <div key={idx} className="flex gap-4">
+                      <div className="w-16 h-16 bg-white border border-gray-100 rounded-lg overflow-hidden flex-shrink-0 p-1">
+                        <img src={item.images?.[0] || item.image || 'https://via.placeholder.com/150'} alt={item.name} className="w-full h-full object-contain" />
+                      </div>
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <h4 className="text-sm font-semibold text-gray-900 truncate">{item.name}</h4>
+                        <div className="text-xs text-gray-500 mt-1 flex items-center justify-between">
+                          <span>Qty: {item.quantity}</span>
+                          <span className="font-bold text-gray-900">{formatINR(item.price * item.quantity)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-gray-200 pt-6 mb-6"></div>
 
                 {/* Coupon Code */}
                 <div className="mb-4">

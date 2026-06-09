@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
+import { Pagination } from './Pagination';
 
 export function AdminsTab({
   users,
@@ -7,6 +9,11 @@ export function AdminsTab({
   handleUserRoleChange
 }) {
   const admins = users.filter(u => u.role === 'admin');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  
+  const totalPages = Math.ceil(admins.length / ITEMS_PER_PAGE);
+  const currentItems = admins.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
@@ -23,7 +30,7 @@ export function AdminsTab({
             </tr>
           </thead>
           <tbody>
-            {admins.map(u => (
+            {currentItems.map(u => (
               <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                 <td className="p-4">
                   <div className="font-bold text-gray-950">{u.name}</div>
@@ -77,6 +84,11 @@ export function AdminsTab({
           </tbody>
         </table>
       </div>
+      <Pagination 
+        currentPage={currentPage} 
+        totalPages={totalPages} 
+        onPageChange={setCurrentPage} 
+      />
     </div>
   );
 }
