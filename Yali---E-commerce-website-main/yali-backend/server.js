@@ -439,8 +439,27 @@ app.get('/yali_api/products', async (req, res) => {
       ...r,
       price: parseFloat(r.price),
       originalPrice: r.original_price ? parseFloat(r.original_price) : null,
-      rating: parseFloat(r.rating)
+      rating: parseFloat(r.rating),
+      variants: []
     }));
+
+    if (parsedRows.length > 0) {
+      const productIds = parsedRows.map(p => p.id);
+      const [variants] = await pool.query('SELECT * FROM product_variants WHERE product_id IN (?)', [productIds]);
+      variants.forEach(v => {
+        const prod = parsedRows.find(p => p.id === v.product_id);
+        if (prod) {
+          prod.variants.push({
+            id: v.id,
+            sku: v.sku,
+            attributes: typeof v.attributes_json === 'string' ? JSON.parse(v.attributes_json) : v.attributes_json,
+            price: parseFloat(v.price),
+            stock: v.stock
+          });
+        }
+      });
+    }
+
     res.json(parsedRows);
   } catch (error) {
     console.error('Fetch products error:', error);
@@ -455,11 +474,20 @@ app.get('/yali_api/products/:id', async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     
     const p = rows[0];
+    const [variants] = await pool.query('SELECT * FROM product_variants WHERE product_id = ?', [p.id]);
+    
     res.json({
       ...p,
       price: parseFloat(p.price),
       originalPrice: p.original_price ? parseFloat(p.original_price) : null,
-      rating: parseFloat(p.rating)
+      rating: parseFloat(p.rating),
+      variants: variants.map(v => ({
+        id: v.id,
+        sku: v.sku,
+        attributes: typeof v.attributes_json === 'string' ? JSON.parse(v.attributes_json) : v.attributes_json,
+        price: parseFloat(v.price),
+        stock: v.stock
+      }))
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -472,7 +500,7 @@ app.post('/yali_api/products', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Unauthorized access' });
   }
 
-  const { name, description, price, originalPrice, image, stock, badge, category, unique_id, images, return_policy, delivery_days } = req.body;
+  const { name, description, price, originalPrice, image, stock, badge, category, unique_id, images, return_policy, delivery_days, variants } = req.body;
 
   if (!name || !price || !category) {
     return res.status(400).json({ error: 'Product name, price, and category are required' });
@@ -522,6 +550,21 @@ app.post('/yali_api/products', authenticateToken, async (req, res) => {
       await pool.query('UPDATE products SET unique_id = ? WHERE id = ?', [generatedUniqueId, newId]);
     }
 
+    if (variants && Array.isArray(variants) && variants.length > 0) {
+      for (const v of variants) {
+        await pool.query(
+          'INSERT INTO product_variants (product_id, sku, attributes_json, price, stock) VALUES (?, ?, ?, ?, ?)',
+          [
+            newId,
+            v.sku || null,
+            JSON.stringify(v.attributes || {}),
+            v.price !== undefined ? parseFloat(v.price) : parseFloat(price),
+            v.stock !== undefined ? parseInt(v.stock) : 0
+          ]
+        );
+      }
+    }
+
     res.status(201).json({ message: 'Product created successfully', id: newId });
   } catch (error) {
     console.error('Create product error:', error);
@@ -536,7 +579,7 @@ app.put('/yali_api/products/:id', authenticateToken, async (req, res) => {
   }
 
   const productId = req.params.id;
-  const { name, description, price, originalPrice, image, stock, badge, category, unique_id, images, return_policy, delivery_days } = req.body;
+  const { name, description, price, originalPrice, image, stock, badge, category, unique_id, images, return_policy, delivery_days, variants } = req.body;
 
   try {
     const [existing] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
@@ -574,6 +617,23 @@ app.put('/yali_api/products/:id', authenticateToken, async (req, res) => {
         productId
       ]
     );
+
+    if (variants && Array.isArray(variants)) {
+      // Clear existing variants and replace
+      await pool.query('DELETE FROM product_variants WHERE product_id = ?', [productId]);
+      for (const v of variants) {
+        await pool.query(
+          'INSERT INTO product_variants (product_id, sku, attributes_json, price, stock) VALUES (?, ?, ?, ?, ?)',
+          [
+            productId,
+            v.sku || null,
+            JSON.stringify(v.attributes || {}),
+            v.price !== undefined ? parseFloat(v.price) : (price ? parseFloat(price) : prod.price),
+            v.stock !== undefined ? parseInt(v.stock) : 0
+          ]
+        );
+      }
+    }
 
     res.json({ message: 'Product updated successfully' });
   } catch (error) {
@@ -668,7 +728,6 @@ app.post('/yali_api/products/import', authenticateToken, async (req, res) => {
   }
 });
 
-
 // -------------------------------------------------------------
 // 📦 ORDER MANAGEMENT ROUTES
 // -------------------------------------------------------------
@@ -739,8 +798,9 @@ app.post('/yali_api/orders', authenticateToken, async (req, res) => {
 
     // 4. Save order record
     const orderId = 'ORD-' + Math.random().toString(36).substring(2, 11).toUpperCase();
+    const initialHistory = JSON.stringify([{ status: 'Pending', date: new Date().toISOString() }]);
     await connection.query(
-      'INSERT INTO orders (order_id, customer_id, customer_name, customer_email, address, payment_method, subtotal, tax, shipping, discount, total, status, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO orders (order_id, customer_id, customer_name, customer_email, address, payment_method, subtotal, tax, shipping, discount, total, status, category, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         orderId,
         req.user.id,
@@ -754,21 +814,24 @@ app.post('/yali_api/orders', authenticateToken, async (req, res) => {
         parseFloat(discount),
         parseFloat(total),
         'Pending',
-        mainCategory
+        mainCategory,
+        initialHistory
       ]
     );
 
     // 5. Save order items
     for (const item of items) {
       await connection.query(
-        'INSERT INTO order_items (order_id, product_id, name, price, quantity, image) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO order_items (order_id, product_id, name, price, quantity, image, variant_id, variant_desc) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [
           orderId,
           item.id,
           item.name,
           parseFloat(item.price),
           parseInt(item.quantity),
-          item.image
+          item.image,
+          item.variant_id || null,
+          item.variant_desc || null
         ]
       );
     }
@@ -904,8 +967,8 @@ app.put('/yali_api/orders/:id/assign', authenticateToken, async (req, res) => {
 
 // Update Order status
 app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
-  const orderId = req.params.id;
-  const { status } = req.body;
+  const { id: orderId } = req.params;
+  const { status, trackingNumber, trackingLink, deliveryPartner } = req.body;
 
   try {
     const [orders] = await pool.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
@@ -913,22 +976,64 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
 
     const order = orders[0];
 
-    // Authorization checks: Admin or the Assigned Vendor
-    if (req.user.role === 'vendor' && order.assigned_vendor_id !== req.user.id) {
-      return res.status(403).json({ error: 'Unauthorized: This order is not assigned to you' });
-    }
-
-    // Check if user is restricted by category
-    if (req.user.managed_category && req.user.managed_category !== 'all') {
-      if (req.user.managed_category !== order.category) {
-        return res.status(403).json({ error: `Unauthorized: You can only manage orders for '${req.user.managed_category}'.` });
+    // Authorization checks
+    if (req.user.role === 'customer') {
+      if (order.customer_id !== req.user.id) {
+        return res.status(403).json({ error: 'Unauthorized: This order does not belong to you' });
+      }
+      if (!['Cancelled', 'Returned'].includes(status)) {
+        return res.status(403).json({ error: 'Customers can only Cancel or Return orders' });
+      }
+      if (status === 'Cancelled' && !['Pending', 'Confirmed'].includes(order.status)) {
+        return res.status(400).json({ error: 'Order cannot be cancelled at this stage' });
+      }
+      if (status === 'Returned' && order.status !== 'Delivered') {
+        return res.status(400).json({ error: 'Only delivered orders can be returned' });
+      }
+    } else {
+      // Admin or Assigned Vendor checks
+      if (req.user.role === 'vendor' && order.assigned_vendor_id !== req.user.id) {
+        return res.status(403).json({ error: 'Unauthorized: This order is not assigned to you' });
+      }
+      // Check if user is restricted by category
+      if (req.user.managed_category && req.user.managed_category !== 'all') {
+        if (req.user.managed_category !== order.category) {
+          return res.status(403).json({ error: `Unauthorized: You can only manage orders for '${req.user.managed_category}'.` });
+        }
       }
     }
 
-    await pool.query('UPDATE orders SET status = ? WHERE order_id = ?', [status, orderId]);
+    // Parse existing history and append new status
+    let history = [];
+    try {
+      if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
+    } catch(e) {}
+    history.push({ status, date: new Date().toISOString() });
+
+    // Update the status and tracking info if provided
+    let query = 'UPDATE orders SET status = ?, status_history = ?';
+    const params = [status, JSON.stringify(history)];
+    
+    if (trackingNumber !== undefined) {
+      query += ', tracking_number = ?';
+      params.push(trackingNumber);
+    }
+    if (trackingLink !== undefined) {
+      query += ', tracking_link = ?';
+      params.push(trackingLink);
+    }
+    if (deliveryPartner !== undefined) {
+      query += ', delivery_partner = ?';
+      params.push(deliveryPartner);
+    }
+    
+    query += ' WHERE order_id = ?';
+    params.push(orderId);
+
+    await pool.query(query, params);
 
     // If order was cancelled and was paid via WALLET, refund customer wallet balance
-    if (status === 'Cancelled' && order.payment_method === 'WALLET') {
+    if (status === 'Cancelled' && order.payment_method === 'WALLET' && order.status !== 'Cancelled') {
       await pool.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [order.total, order.customer_id]);
       
       // Log wallet transaction
@@ -939,11 +1044,26 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
       );
     }
 
+    // If order is returned, refund the product price (subtotal) directly to wallet regardless of payment method
+    if (status === 'Returned' && order.status !== 'Returned') {
+      await pool.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [order.subtotal, order.customer_id]);
+      
+      // Log wallet transaction
+      const txnId = 'TXN-RET-' + Date.now();
+      await pool.query(
+        'INSERT INTO wallet_transactions (id, user_id, type, amount, description) VALUES (?, ?, ?, ?, ?)',
+        [txnId, order.customer_id, 'credit', parseFloat(order.subtotal), `Wallet refund for returned order ${orderId}`]
+      );
+    }
+
     // Fetch updated order & items to email customer
     const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
     const updatedOrder = {
       ...order,
       status,
+      tracking_number: trackingNumber !== undefined ? trackingNumber : order.tracking_number,
+      tracking_link: trackingLink !== undefined ? trackingLink : order.tracking_link,
+      delivery_partner: deliveryPartner !== undefined ? deliveryPartner : order.delivery_partner,
       items
     };
 
@@ -960,7 +1080,7 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
 // Update Order tracking number
 app.put('/yali_api/orders/:id/tracking', authenticateToken, async (req, res) => {
   const orderId = req.params.id;
-  const { trackingNumber } = req.body;
+  const { trackingNumber, trackingLink, deliveryPartner } = req.body;
 
   try {
     const [orders] = await pool.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
@@ -973,7 +1093,22 @@ app.put('/yali_api/orders/:id/tracking', authenticateToken, async (req, res) => 
       return res.status(403).json({ error: 'Unauthorized assignment details access' });
     }
 
-    await pool.query('UPDATE orders SET tracking_number = ? WHERE order_id = ?', [trackingNumber, orderId]);
+    let query = 'UPDATE orders SET tracking_number = ?';
+    const params = [trackingNumber !== undefined ? trackingNumber : order.tracking_number];
+
+    if (trackingLink !== undefined) {
+      query += ', tracking_link = ?';
+      params.push(trackingLink);
+    }
+    if (deliveryPartner !== undefined) {
+      query += ', delivery_partner = ?';
+      params.push(deliveryPartner);
+    }
+
+    query += ' WHERE order_id = ?';
+    params.push(orderId);
+
+    await pool.query(query, params);
 
     res.json({ message: 'Tracking details updated' });
   } catch (error) {
@@ -1004,6 +1139,258 @@ app.put('/yali_api/orders/:id/delivery-date', authenticateToken, async (req, res
   }
 });
 
+
+// -------------------------------------------------------------
+// 📦 WALLET REFUNDS & CANCELLATIONS
+// -------------------------------------------------------------
+
+// Cancel Order endpoint
+app.post('/yali_api/orders/:id/cancel', authenticateToken, async (req, res) => {
+  const orderId = req.params.id;
+  const { reason } = req.body;
+  if (!reason) return res.status(400).json({ error: 'Cancellation reason is required' });
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [orders] = await connection.query('SELECT * FROM orders WHERE order_id = ? FOR UPDATE', [orderId]);
+    if (orders.length === 0) throw new Error('Order not found');
+    const order = orders[0];
+
+    // Auth check
+    if (req.user.role === 'customer' && order.customer_id !== req.user.id) {
+      throw new Error('Unauthorized');
+    }
+
+    if (!['Pending', 'Confirmed', 'Packed'].includes(order.status)) {
+      throw new Error('Order cannot be cancelled at this stage');
+    }
+
+    // Update status history
+    let history = [];
+    try {
+      if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
+    } catch(e) {}
+    history.push({ status: 'Cancelled', date: new Date().toISOString() });
+
+    // Calculate refund
+    let refundAmount = 0;
+    let refundStatus = 'none';
+    if (order.payment_method !== 'cod' && order.payment_method !== 'COD') {
+      refundAmount = parseFloat(order.total);
+      refundStatus = 'refunded';
+      
+      // Credit wallet
+      await connection.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [refundAmount, order.customer_id]);
+      
+      // Log transaction
+      const txnId = 'TXN-CAN-' + Date.now();
+      await connection.query(
+        'INSERT INTO wallet_transactions (id, user_id, type, amount, description) VALUES (?, ?, ?, ?, ?)',
+        [txnId, order.customer_id, 'credit', refundAmount, `Refund for cancelled order ${orderId}`]
+      );
+    }
+
+    // Restore stock
+    const [items] = await connection.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [orderId]);
+    for (const item of items) {
+      await connection.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
+    }
+
+    // Save order
+    await connection.query(
+      'UPDATE orders SET status = ?, status_history = ?, cancellation_reason = ?, refund_amount = ?, refund_status = ? WHERE order_id = ?',
+      ['Cancelled', JSON.stringify(history), reason, refundAmount, refundStatus, orderId]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Order cancelled successfully', refundAmount });
+  } catch (err) {
+    if (connection) await connection.rollback();
+    res.status(400).json({ error: err.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// Request Return endpoint
+app.post('/yali_api/orders/:id/return', authenticateToken, async (req, res) => {
+  const orderId = req.params.id;
+  const { reason } = req.body;
+  if (!reason) return res.status(400).json({ error: 'Return reason is required' });
+
+  try {
+    const [orders] = await pool.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
+    const order = orders[0];
+
+    if (req.user.role === 'customer' && order.customer_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    if (order.status !== 'Delivered') {
+      return res.status(400).json({ error: 'Only delivered orders can be returned' });
+    }
+
+    let history = [];
+    try {
+      if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
+    } catch(e) {}
+    history.push({ status: 'Return Requested', date: new Date().toISOString() });
+
+    await pool.query(
+      'UPDATE orders SET status = ?, status_history = ?, return_reason = ? WHERE order_id = ?',
+      ['Return Requested', JSON.stringify(history), reason, orderId]
+    );
+
+    res.json({ message: 'Return request submitted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin Approve Return endpoint
+app.post('/yali_api/admin/orders/:id/approve_return', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  
+  const orderId = req.params.id;
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [orders] = await connection.query('SELECT * FROM orders WHERE order_id = ? FOR UPDATE', [orderId]);
+    if (orders.length === 0) throw new Error('Order not found');
+    const order = orders[0];
+
+    if (order.status !== 'Return Requested') {
+      throw new Error('Order must be in Return Requested status');
+    }
+
+    // Product price only refund (subtotal minus discounts)
+    let productPriceOnly = parseFloat(order.subtotal) - parseFloat(order.discount || 0);
+    if (productPriceOnly < 0) productPriceOnly = 0;
+
+    let history = [];
+    try {
+      if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
+    } catch(e) {}
+    history.push({ status: 'Returned', date: new Date().toISOString() });
+
+    // Credit wallet
+    await connection.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [productPriceOnly, order.customer_id]);
+    
+    const txnId = 'TXN-RET-' + Date.now();
+    await connection.query(
+      'INSERT INTO wallet_transactions (id, user_id, type, amount, description) VALUES (?, ?, ?, ?, ?)',
+      [txnId, order.customer_id, 'credit', productPriceOnly, `Wallet refund for returned order ${orderId}`]
+    );
+
+    // Restore stock
+    const [items] = await connection.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [orderId]);
+    for (const item of items) {
+      await connection.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
+    }
+
+    await connection.query(
+      'UPDATE orders SET status = ?, status_history = ?, refund_amount = ?, refund_status = ? WHERE order_id = ?',
+      ['Returned', JSON.stringify(history), productPriceOnly, 'refunded', orderId]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Return approved and refunded to wallet', refundAmount: productPriceOnly });
+  } catch (err) {
+    if (connection) await connection.rollback();
+    res.status(400).json({ error: err.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// -------------------------------------------------------------
+// 📍 USER ADDRESSES
+// -------------------------------------------------------------
+
+// Get all saved addresses for a user
+app.get('/yali_api/addresses', authenticateToken, async (req, res) => {
+  try {
+    const [addresses] = await pool.query('SELECT * FROM user_addresses WHERE user_id = ? ORDER BY id DESC', [req.user.id]);
+    
+    const mapped = addresses.map(a => ({
+      id: a.id,
+      user_id: a.user_id,
+      title: a.label,
+      full_name: a.name,
+      phone: a.phone,
+      address_line: a.address,
+      city: a.city,
+      state: a.state,
+      pincode: a.pincode,
+      is_default: a.is_default
+    }));
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('Fetch addresses error:', error);
+    res.status(500).json({ error: 'Server error fetching addresses' });
+  }
+});
+
+// Add a new address
+app.post('/yali_api/addresses', authenticateToken, async (req, res) => {
+  const { title, full_name, phone, address_line, city, state, pincode, is_default } = req.body;
+
+  try {
+    // If is_default is true, set all other addresses to not default
+    if (is_default) {
+      await pool.query('UPDATE user_addresses SET is_default = FALSE WHERE user_id = ?', [req.user.id]);
+    }
+
+    const [result] = await pool.query(
+      'INSERT INTO user_addresses (user_id, label, name, phone, address, city, state, pincode, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.user.id, title || 'Home', full_name || '', phone || '', address_line || '', city || '', state || '', pincode || '', is_default ? true : false]
+    );
+
+    res.status(201).json({ message: 'Address saved successfully', id: result.insertId });
+  } catch (error) {
+    console.error('Save address error:', error);
+    res.status(500).json({ error: 'Server error saving address' });
+  }
+});
+
+// Update an address
+app.put('/yali_api/addresses/:id', authenticateToken, async (req, res) => {
+  const { title, full_name, phone, address_line, city, state, pincode, is_default } = req.body;
+  
+  try {
+    if (is_default) {
+      await pool.query('UPDATE user_addresses SET is_default = FALSE WHERE user_id = ?', [req.user.id]);
+    }
+
+    await pool.query(
+      'UPDATE user_addresses SET label = ?, name = ?, phone = ?, address = ?, city = ?, state = ?, pincode = ?, is_default = ? WHERE id = ? AND user_id = ?',
+      [title || 'Home', full_name || '', phone || '', address_line || '', city || '', state || '', pincode || '', is_default ? true : false, req.params.id, req.user.id]
+    );
+
+    res.json({ message: 'Address updated successfully' });
+  } catch (error) {
+    console.error('Update address error:', error);
+    res.status(500).json({ error: 'Server error updating address' });
+  }
+});
+
+// Delete an address
+app.delete('/yali_api/addresses/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM user_addresses WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    res.json({ message: 'Address deleted successfully' });
+  } catch (error) {
+    console.error('Delete address error:', error);
+    res.status(500).json({ error: 'Server error deleting address' });
+  }
+});
 
 // -------------------------------------------------------------
 // 👥 USER CONTROLLER ROUTES (ADMIN ONLY)
@@ -2116,6 +2503,42 @@ app.put('/yali_api/page-sections/reorder/batch', authenticateToken, async (req, 
     res.json({ message: 'Sections reordered' });
   } catch (error) {
     console.error('Reorder page sections error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+// -------------------------------------------------------------
+// DELIVERY PARTNERS API
+// -------------------------------------------------------------
+
+app.get('/yali_api/delivery-partners', async (req, res) => {
+  try {
+    const [partners] = await pool.query('SELECT * FROM delivery_partners ORDER BY name ASC');
+    res.json(partners);
+  } catch (error) {
+    console.error('Fetch delivery partners error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/yali_api/delivery-partners', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const { name, status } = req.body;
+    await pool.query('INSERT INTO delivery_partners (name, status) VALUES (?, ?)', [name, status || 'active']);
+    res.status(201).json({ message: 'Delivery partner added' });
+  } catch (error) {
+    console.error('Add delivery partner error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/yali_api/delivery-partners/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    await pool.query('DELETE FROM delivery_partners WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Delivery partner deleted' });
+  } catch (error) {
+    console.error('Delete delivery partner error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

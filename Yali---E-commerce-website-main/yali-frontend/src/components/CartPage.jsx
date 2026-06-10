@@ -60,9 +60,19 @@ export function CartPage({
                     />
                     <div className="flex-1 min-w-0 flex flex-col justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">
+                        <h3 className="text-xl font-bold text-gray-900 mb-1 line-clamp-2">
                           {item.name}
                         </h3>
+                        {item.selected_variant && (
+                          <div className="text-sm text-gray-500 mb-2 font-medium">
+                            {(() => {
+                              try {
+                                const variant = typeof item.selected_variant === 'string' ? JSON.parse(item.selected_variant) : item.selected_variant;
+                                return Object.entries(variant.attributes || {}).map(([k, val]) => `${k}: ${val}`).join(' | ');
+                              } catch(e) { return null; }
+                            })()}
+                          </div>
+                        )}
                         <span className="text-2xl font-black text-[#0066cc]">
                           {formatINR(item.price)}
                         </span>

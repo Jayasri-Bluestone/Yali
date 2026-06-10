@@ -19,7 +19,9 @@ import {
   Heart,
   MapPin,
   MessageSquare,
-  Trash2
+  Trash2,
+  Truck,
+  RefreshCcw
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
@@ -40,6 +42,8 @@ import { WishlistsTab } from './WishlistsTab';
 import { LocationsTab } from './LocationsTab';
 import { ReviewsTab } from './ReviewsTab';
 import { PageBuilderTab } from './PageBuilderTab';
+import { DeliveryPartnersTab } from './DeliveryPartnersTab';
+import { RefundsReturnsTab } from './RefundsReturnsTab';
 import { FileUploadInput } from './FileUploadInput';
 import { API_URL } from '../../config';
 
@@ -111,7 +115,8 @@ export function AdminDashboard({
     deliveryDays: '3',
     stock: '',
     description: '',
-    badge: ''
+    badge: '',
+    variants: []
   });
 
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
@@ -172,7 +177,9 @@ export function AdminDashboard({
     { id: 'ui-cards', label: 'Site Cards', icon: Layers, show: isSuperAdmin },
     { id: 'videos', label: 'Spotlight Videos', icon: Film, show: isSuperAdmin || isCategoryAdmin },
     { id: 'locations', label: 'Visitor Locations', icon: MapPin, show: isSuperAdmin },
-    { id: 'reviews', label: 'Product Reviews', icon: MessageSquare, show: userData?.role === 'admin' }
+    { id: 'reviews', label: 'Product Reviews', icon: MessageSquare, show: userData?.role === 'admin' },
+    { id: 'delivery-partners', label: 'Delivery Partners', icon: Truck, show: isSuperAdmin },
+    { id: 'refunds-returns', label: 'Refunds & Returns', icon: RefreshCcw, show: userData?.role === 'admin' }
   ].filter(t => t.show);
 
   // -------------------------------------------------------------
@@ -261,7 +268,8 @@ export function AdminDashboard({
       delivery_days: parseInt(productForm.deliveryDays) || 3,
       stock: parseInt(productForm.stock) || 0,
       description: productForm.description,
-      badge: productForm.badge
+      badge: productForm.badge,
+      variants: productForm.variants || []
     };
 
     try {
@@ -306,7 +314,8 @@ export function AdminDashboard({
         deliveryDays: '3',
         stock: '',
         description: '',
-        badge: ''
+        badge: '',
+        variants: []
       });
       refreshProducts();
     } catch (err) {
@@ -328,7 +337,13 @@ export function AdminDashboard({
       deliveryDays: p.delivery_days ? p.delivery_days.toString() : '3',
       stock: (p.stock ?? 0).toString(),
       description: p.description || '',
-      badge: p.badge || ''
+      badge: p.badge || '',
+      variants: Array.isArray(p.variants) ? p.variants.map(v => ({
+        sku: v.sku || '',
+        attributes: v.attributes || {},
+        price: v.price !== null ? v.price.toString() : '',
+        stock: v.stock !== null ? v.stock.toString() : ''
+      })) : []
     });
     setIsProductModalOpen(true);
   };
@@ -385,7 +400,7 @@ export function AdminDashboard({
     });
   };
 
-  const handleOrderStatusChange = async (orderId, newStatus) => {
+  const handleOrderStatusChange = async (orderId, newStatus, extraData = {}) => {
     try {
       const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
         method: 'PUT',
@@ -393,7 +408,7 @@ export function AdminDashboard({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus, ...extraData })
       });
 
       const data = await res.json();
@@ -406,7 +421,7 @@ export function AdminDashboard({
     }
   };
 
-  const handleTrackingUpdate = async (orderId, trackingNum) => {
+  const handleTrackingUpdate = async (orderId, updates) => {
     try {
       const res = await fetch(`${API_URL}/orders/${orderId}/tracking`, {
         method: 'PUT',
@@ -414,7 +429,7 @@ export function AdminDashboard({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ trackingNumber: trackingNum })
+        body: JSON.stringify(updates)
       });
 
       const data = await res.json();
@@ -779,6 +794,16 @@ export function AdminDashboard({
             } />
 
             {userData?.role === 'admin' && (
+              <Route path="/admin/refunds-returns" element={
+                <RefundsReturnsTab
+                  orders={filteredOrders}
+                  token={token}
+                  refreshOrders={refreshOrders}
+                />
+              } />
+            )}
+
+            {userData?.role === 'admin' && (
               <Route path="/admin/users" element={
                 <CustomersTab
                   users={users}
@@ -799,6 +824,12 @@ export function AdminDashboard({
                   handleToggleUserStatus={handleToggleUserStatus}
                   handleUserRoleChange={handleUserRoleChange}
                 />
+              } />
+            )}
+
+            {isSuperAdmin && (
+              <Route path="/admin/delivery-partners" element={
+                <DeliveryPartnersTab />
               } />
             )}
 
@@ -1035,6 +1066,91 @@ export function AdminDashboard({
                 {(!Array.isArray(productForm.images) || productForm.images.length === 0) && (
                   <div className="text-center py-4 text-xs text-gray-400 border border-dashed border-gray-300 rounded-lg">
                     No gallery images added yet.
+                  </div>
+                )}
+              </div>
+
+              {/* Variant Builder */}
+              <div className="space-y-3 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                <div className="flex justify-between items-center">
+                  <label className="block text-sm font-bold text-indigo-900">Product Variants</label>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      const currentVars = Array.isArray(productForm.variants) ? productForm.variants : [];
+                      setProductForm({ ...productForm, variants: [...currentVars, { sku: '', attributes: {}, price: '', stock: '' }] });
+                    }}
+                    className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition-colors cursor-pointer"
+                  >
+                    + Add Variant
+                  </button>
+                </div>
+                {Array.isArray(productForm.variants) && productForm.variants.map((variant, idx) => (
+                  <div key={idx} className="flex flex-wrap gap-2 items-center bg-white p-3 rounded-lg border border-indigo-200 shadow-sm relative group">
+                    <div className="w-full sm:w-auto flex-1">
+                      <input 
+                        type="text" 
+                        placeholder="Variant Attributes (e.g. Size: M, Color: Red)" 
+                        value={variant.attributesString !== undefined ? variant.attributesString : Object.entries(variant.attributes || {}).map(([k,v]) => `${k}: ${v}`).join(', ')}
+                        onChange={(e) => {
+                          const newVars = [...productForm.variants];
+                          newVars[idx].attributesString = e.target.value;
+                          const pairs = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                          const attrs = {};
+                          pairs.forEach(p => {
+                            const [k, v] = p.split(':');
+                            if (k && v) attrs[k.trim()] = v.trim();
+                          });
+                          newVars[idx].attributes = attrs;
+                          setProductForm({ ...productForm, variants: newVars });
+                        }}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                      />
+                      <div className="text-[9px] text-gray-400 mt-0.5">Format: "Key: Value, Key: Value"</div>
+                    </div>
+                    <div className="w-24">
+                      <input 
+                        type="number" 
+                        placeholder="Price" 
+                        value={variant.price} 
+                        onChange={(e) => {
+                          const newVars = [...productForm.variants];
+                          newVars[idx].price = e.target.value;
+                          setProductForm({ ...productForm, variants: newVars });
+                        }}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                      />
+                    </div>
+                    <div className="w-24">
+                      <input 
+                        type="number" 
+                        placeholder="Stock" 
+                        value={variant.stock} 
+                        onChange={(e) => {
+                          const newVars = [...productForm.variants];
+                          newVars[idx].stock = e.target.value;
+                          setProductForm({ ...productForm, variants: newVars });
+                        }}
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                      />
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const newVars = [...productForm.variants];
+                        newVars.splice(idx, 1);
+                        setProductForm({ ...productForm, variants: newVars });
+                      }}
+                      className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
+                      title="Remove variant"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {(!Array.isArray(productForm.variants) || productForm.variants.length === 0) && (
+                  <div className="text-center py-4 text-xs text-indigo-400 border border-dashed border-indigo-200 rounded-lg">
+                    No variants added. Product will be treated as a single item.
                   </div>
                 )}
               </div>

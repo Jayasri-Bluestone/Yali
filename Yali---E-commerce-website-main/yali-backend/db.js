@@ -98,8 +98,10 @@ async function initDB() {
         shipping DECIMAL(10,2) NOT NULL,
         discount DECIMAL(10,2) NOT NULL,
         total DECIMAL(10,2) NOT NULL,
-        status ENUM('Pending', 'Confirmed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Returned') DEFAULT 'Pending',
+        status ENUM('Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Returned') DEFAULT 'Pending',
         tracking_number VARCHAR(100) DEFAULT '',
+        tracking_link VARCHAR(500) NULL,
+        delivery_partner VARCHAR(255) NULL,
         assigned_vendor_id INT NULL,
         category VARCHAR(100) NULL,
         expected_delivery_date DATE NULL,
@@ -109,16 +111,58 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 4.5 Create Delivery Partners Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS delivery_partners (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 4.6 Create Product Variants Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS product_variants (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        sku VARCHAR(100) NULL,
+        attributes_json JSON NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        stock INT DEFAULT 0,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 4.7 Create User Addresses Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS user_addresses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        title VARCHAR(100) NOT NULL,
+        full_name VARCHAR(255) NOT NULL,
+        phone VARCHAR(20) NOT NULL,
+        address_line TEXT NOT NULL,
+        city VARCHAR(100) NOT NULL,
+        state VARCHAR(100) NOT NULL,
+        pincode VARCHAR(20) NOT NULL,
+        is_default BOOLEAN DEFAULT FALSE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // 5. Create Order Items Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS order_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         order_id VARCHAR(50) NOT NULL,
         product_id INT NOT NULL,
+        variant_id INT NULL,
+        variant_desc VARCHAR(255) NULL,
         name VARCHAR(255) NOT NULL,
         price DECIMAL(10,2) NOT NULL,
         quantity INT NOT NULL,
-        image VARCHAR(500),
+        image TEXT,
         FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -153,13 +197,40 @@ async function initDB() {
     try {
       await connection.query("ALTER TABLE products MODIFY COLUMN image MEDIUMTEXT");
       await connection.query("ALTER TABLE products MODIFY COLUMN images MEDIUMTEXT");
+      await connection.query("ALTER TABLE order_items MODIFY COLUMN image MEDIUMTEXT");
     } catch (e) {
-      console.warn('Could not modify image columns in products:', e.message);
+      console.warn('Could not modify image columns to MEDIUMTEXT:', e.message);
     }
     try {
       await connection.query("ALTER TABLE orders ADD COLUMN expected_delivery_date DATE NULL");
     } catch (e) {
       if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add expected_delivery_date to orders:', e.message);
+    }
+    
+    // Add columns for Cancellations, Returns, and Refunds
+    try {
+      await connection.query("ALTER TABLE orders ADD COLUMN cancellation_reason TEXT NULL");
+      await connection.query("ALTER TABLE orders ADD COLUMN return_reason TEXT NULL");
+      await connection.query("ALTER TABLE orders ADD COLUMN refund_amount DECIMAL(10,2) DEFAULT 0.00");
+      await connection.query("ALTER TABLE orders ADD COLUMN refund_status ENUM('none', 'pending', 'refunded') DEFAULT 'none'");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add refund columns to orders:', e.message);
+    }
+
+    try {
+      await connection.query("ALTER TABLE orders MODIFY COLUMN status ENUM('Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Return Requested', 'Returned') DEFAULT 'Pending'");
+    } catch (e) {
+      console.warn('Could not modify status enum in orders:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE orders ADD COLUMN tracking_link VARCHAR(500) NULL");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add tracking_link to orders:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE orders ADD COLUMN delivery_partner VARCHAR(255) NULL");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add delivery_partner to orders:', e.message);
     }
     try {
       await connection.query("ALTER TABLE products ADD COLUMN images TEXT");
@@ -168,6 +239,16 @@ async function initDB() {
     }
     try {
       await connection.query("ALTER TABLE products ADD COLUMN return_policy VARCHAR(255) DEFAULT '7 Days Replacement'");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add return_policy to products:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE order_items ADD COLUMN variant_id INT NULL");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add variant_id to order_items:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE order_items ADD COLUMN variant_desc VARCHAR(255) NULL");
     } catch (e) {
       if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add return_policy to products:', e.message);
     }

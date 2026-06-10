@@ -5,6 +5,7 @@ export function FilterSidebar({
   filters, 
   onFilterChange, 
   availableCategories = [],
+  availableBrands = [],
   showCategoryFilter = false
 }) {
   const [expandedSections, setExpandedSections] = useState({
@@ -32,6 +33,7 @@ export function FilterSidebar({
   const clearFilters = () => {
     onFilterChange({
       categories: [],
+      brands: [],
       priceMin: '',
       priceMax: '',
       ratings: [],
@@ -40,8 +42,6 @@ export function FilterSidebar({
     });
   };
 
-  // Dummy lists for visual parity with screenshot
-  const brandList = ['Generic', 'Premium', 'Standard'];
   const priceStops = ['', '500', '1000', '2000', '5000', '10000', '30000+'];
 
   return (
@@ -84,23 +84,29 @@ export function FilterSidebar({
           </div>
         )}
 
-        {/* Brand (Visual Only for exact match to screenshot) */}
-        <div className="border-b border-gray-200">
-          <button onClick={() => toggleSection('brand')} className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors cursor-pointer">
-            <span className="text-[12px] font-medium text-gray-800 uppercase tracking-wide">Brand</span>
-            <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.brand ? 'rotate-180' : ''}`} />
-          </button>
-          {expandedSections.brand && (
-            <div className="px-4 pb-4 space-y-3">
-              {brandList.map(b => (
-                <label key={b} className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" className="w-[14px] h-[14px] rounded-[2px] border-gray-300 text-[#2874f0] focus:ring-0 cursor-pointer" />
-                  <span className="text-[13px] text-gray-700">{b}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+        {availableBrands.length > 0 && (
+          <div className="border-b border-gray-200">
+            <button onClick={() => toggleSection('brand')} className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors cursor-pointer">
+              <span className="text-[12px] font-medium text-gray-800 uppercase tracking-wide">Brand</span>
+              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.brand ? 'rotate-180' : ''}`} />
+            </button>
+            {expandedSections.brand && (
+              <div className="px-4 pb-4 space-y-3">
+                {availableBrands.map(b => (
+                  <label key={b} className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="w-[14px] h-[14px] rounded-[2px] border-gray-300 text-[#2874f0] focus:ring-0 cursor-pointer" 
+                      checked={(filters.brands || []).includes(b)}
+                      onChange={() => handleCheckboxChange('brands', b)}
+                    />
+                    <span className="text-[13px] text-gray-700">{b}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Price Slider Section */}
         <div className="p-4 border-b border-gray-200">

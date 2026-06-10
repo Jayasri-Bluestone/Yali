@@ -18,6 +18,7 @@ import { WalletDisplay } from './components/WalletDisplay';
 import { ProfilePage } from './components/ProfilePage';
 import { InvoiceModal } from './components/InvoiceModal';
 import { Footer } from './components/Footer';
+import { MyOrdersPage } from './components/MyOrdersPage';
 import { ScrollToTop } from './components/ScrollToTop';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { API_URL } from './config';
@@ -915,29 +916,29 @@ export default function App() {
     fetchUiCards();
   }, [userData?.role]); // Re-fetch when auth state changes so admins get 'all=true'
 
+  const fetchUserData = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserData(data.user);
+        setIsLoggedIn(true);
+      } else {
+        // Token expired or invalid
+        handleLogout();
+      }
+    } catch (e) {
+      console.error('Session verify failed', e);
+      handleLogout();
+    }
+  };
+
   // Fetch session specific states on login/token change
   useEffect(() => {
-    if (token) {
-      const verifySession = async () => {
-        try {
-          const res = await fetch(`${API_URL}/auth/me`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setUserData(data.user);
-            setIsLoggedIn(true);
-          } else {
-            // Token expired or invalid
-            handleLogout();
-          }
-        } catch (e) {
-          console.error('Session verify failed', e);
-          handleLogout();
-        }
-      };
-      verifySession();
-    }
+    fetchUserData();
   }, [token]);
 
   // Load orders and transactions when user details change
@@ -962,7 +963,6 @@ export default function App() {
     setCartItems([]);
     setWishlistItems([]);
     setActiveCategory('all');
-    setGlobalSearchQuery('');
     navigate('/');
     showToast('Logged out successfully', 'info');
   };
@@ -985,7 +985,11 @@ export default function App() {
       const res = await fetch(`${API_URL}/cart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ product_id: product.id, quantity: 1 })
+        body: JSON.stringify({ 
+          product_id: product.id, 
+          quantity: 1,
+          selected_variant: product.selectedVariant ? JSON.stringify(product.selectedVariant) : null
+        })
       });
       if (res.ok) {
         showToast(`Added "${product.name.substring(0, 30)}..." to cart!`, 'success');
@@ -1152,7 +1156,7 @@ export default function App() {
       if (!res.ok) throw new Error(data.error || 'Failed to deposit money');
 
       setUserData(prev => ({ ...prev, wallet: data.newBalance }));
-      showToast(`Successfully added $${amount} to your wallet!`, 'success');
+      showToast(`Successfully added ₹${amount} to your wallet!`, 'success');
       
       fetchTransactions();
     } catch (e) {
@@ -1327,6 +1331,15 @@ export default function App() {
                     transactions={walletTransactions}
                     onAddMoney={handleAddMoneyToWallet}
                     onLogout={handleLogout}
+                  />
+                } />
+                <Route path="/orders" element={
+                  <MyOrdersPage 
+                    orders={orders} 
+                    token={token} 
+                    refreshOrders={fetchOrders} 
+                    refreshUserData={fetchUserData}
+                    API_URL={API_URL} 
                   />
                 } />
                 <Route path="/page/:pageId" element={<StaticPage />} />

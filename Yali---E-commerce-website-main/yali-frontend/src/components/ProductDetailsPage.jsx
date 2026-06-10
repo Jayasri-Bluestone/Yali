@@ -20,6 +20,7 @@ export function ProductDetailsPage({
   const [selectedImage, setSelectedImage] = useState(null);
   const [pincode, setPincode] = useState('');
   const [deliveryInfo, setDeliveryInfo] = useState(null);
+  const [selectedVariant, setSelectedVariant] = useState(null);
 
   const [reviews, setReviews] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
@@ -38,7 +39,10 @@ export function ProductDetailsPage({
     if (product.images) {
       try { extra = JSON.parse(product.images); } catch(e) {}
     }
-    return [product.image, ...extra].filter(Boolean).filter(img => {
+    return [product.image, ...extra].filter(Boolean).map(img => {
+      if (typeof img === 'string') return img.replace(/:\d+$/, '');
+      return img;
+    }).filter(img => {
       if (typeof img !== 'string') return false;
       // Filter out broken base64 prefixes (missing comma/data)
       if (img.startsWith('data:')) return img.includes(',');
@@ -71,6 +75,11 @@ export function ProductDetailsPage({
       fetchReviews();
       setSelectedImage(null);
       setActiveTab('description');
+      if (product.variants && product.variants.length > 0) {
+        setSelectedVariant(product.variants[0]);
+      } else {
+        setSelectedVariant(null);
+      }
     }
   }, [product]);
 
@@ -188,8 +197,11 @@ export function ProductDetailsPage({
 
   const isWishlisted = wishlistItems.some(i => i.id === product.id);
 
-  const discountPercent = product.originalPrice && product.originalPrice > product.price
-    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+  const currentPrice = selectedVariant && selectedVariant.price ? selectedVariant.price : product.price;
+  const currentStock = selectedVariant ? selectedVariant.stock : product.stock;
+
+  const discountPercent = product.originalPrice && product.originalPrice > currentPrice
+    ? Math.round(((product.originalPrice - currentPrice) / product.originalPrice) * 100)
     : product.discount || null;
 
   return (
@@ -333,7 +345,7 @@ export function ProductDetailsPage({
               <h3 className="text-lg font-bold text-gray-900 mb-4">Item Details</h3>
               <ul className="space-y-3 text-sm text-gray-600">
                 <li className="flex"><span className="w-32 font-semibold text-gray-900">Category:</span> <span className="capitalize">{product.category.replace('-', ' ')}</span></li>
-                <li className="flex"><span className="w-32 font-semibold text-gray-900">Stock:</span> <span>{product.stock > 0 ? `${product.stock} units available` : 'Out of stock'}</span></li>
+                <li className="flex"><span className="w-32 font-semibold text-gray-900">Stock:</span> <span>{currentStock > 0 ? `${currentStock} units available` : 'Out of stock'}</span></li>
                 {product.vendor_id && <li className="flex"><span className="w-32 font-semibold text-gray-900">Vendor ID:</span> <span>{product.vendor_id}</span></li>}
               </ul>
             </div>
@@ -346,6 +358,28 @@ export function ProductDetailsPage({
                   {product.category.replace('-', ' ')}
                 </span>
               </div>
+              
+              {/* Variant Selector */}
+              {product.variants && product.variants.length > 0 && (
+                <div className="mb-6 border-b border-gray-100 pb-6">
+                  <h3 className="text-sm font-bold text-gray-900 mb-3">Select Variant</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {product.variants.map((v, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setSelectedVariant(v)}
+                        className={`px-4 py-2 border rounded-xl text-sm font-semibold transition-all ${
+                          selectedVariant?.id === v.id
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'
+                            : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {Object.entries(v.attributes).map(([k, val]) => `${val}`).join(' - ')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               
 
 
@@ -365,8 +399,8 @@ export function ProductDetailsPage({
 
               <div className="mb-8">
                 <div className="flex items-baseline gap-3 mb-1">
-                  <span className="text-4xl font-black text-gray-900">{formatINR(product.price)}</span>
-                  {product.originalPrice && (
+                  <span className="text-4xl font-black text-gray-900">{formatINR(currentPrice)}</span>
+                  {product.originalPrice && product.originalPrice > currentPrice && (
                     <span className="text-xl text-gray-400 font-medium line-through decoration-2">
                       {formatINR(product.originalPrice)}
                     </span>
@@ -405,13 +439,13 @@ export function ProductDetailsPage({
 
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <button 
-                  onClick={() => onBuyNow(product)}
+                  onClick={() => onBuyNow({ ...product, selectedVariant })}
                   className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-black py-4 rounded-xl hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer"
                 >
                   Buy Now
                 </button>
                 <button 
-                  onClick={() => onAddToCart(product)}
+                  onClick={() => onAddToCart({ ...product, selectedVariant })}
                   className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black py-4 rounded-xl hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer"
                 >
                   <ShoppingCart className="w-5 h-5" /> Add to Cart

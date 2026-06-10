@@ -1,4 +1,4 @@
-import { ShoppingCart, Search, User, Menu, Heart, ShieldAlert, Store, LogOut } from 'lucide-react';
+import { ShoppingCart, Search, User, Menu, Heart, ShieldAlert, Store, LogOut, Package } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
 
@@ -121,8 +121,19 @@ export function Header({
 
             {currentView === 'store' && (
               <>
+                {/* Orders Button */}
+                {isLoggedIn && (
+                  <button
+                    onClick={() => navigate('/orders')}
+                    className="relative p-2 hover:bg-gray-100 rounded-full transition-colors hidden sm:block cursor-pointer"
+                    title="My Orders"
+                  >
+                    <Package className="w-6 h-6 text-gray-700" />
+                  </button>
+                )}
+
                 {/* Wishlist Button */}
-                <button 
+                <button
                   onClick={onWishlistClick}
                   className="relative p-2 hover:bg-gray-100 rounded-full transition-colors hidden sm:block cursor-pointer"
                 >
@@ -135,7 +146,7 @@ export function Header({
                 </button>
 
                 {/* Cart Button */}
-                <button 
+                <button
                   onClick={onCartClick}
                   className="relative p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
                 >

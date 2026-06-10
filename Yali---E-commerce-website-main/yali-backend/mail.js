@@ -166,10 +166,27 @@ async function sendStatusUpdateNotification(customerEmail, order) {
     case 'Confirmed':
       statusText = 'Your order has been confirmed by our seller and is being prepared.';
       break;
+    case 'Packed':
+      statusText = 'Your order has been packed and is awaiting pickup by the delivery partner.';
+      statusColor = '#f59e0b';
+      if (order.tracking_link && order.delivery_partner) {
+        trackingHtml = `
+          <div style="background-color: #e0f2fe; border: 1px solid #bae6fd; padding: 12px; border-radius: 6px; margin: 15px 0; color: #0369a1;">
+            <strong>Tracking Link (${order.delivery_partner}):</strong> <a href="${order.tracking_link}" target="_blank" style="color: #0284c7;">Track your package</a>
+          </div>
+        `;
+      }
+      break;
     case 'Shipped':
       statusText = 'Great news! Your order has been shipped and is on its way.';
       statusColor = '#10b981';
-      if (order.trackingNumber) {
+      if (order.tracking_link && order.delivery_partner) {
+        trackingHtml = `
+          <div style="background-color: #e0f2fe; border: 1px solid #bae6fd; padding: 12px; border-radius: 6px; margin: 15px 0; color: #0369a1;">
+            <strong>Tracking Link (${order.delivery_partner}):</strong> <a href="${order.tracking_link}" target="_blank" style="color: #0284c7;">Track your package</a>
+          </div>
+        `;
+      } else if (order.trackingNumber) {
         trackingHtml = `
           <div style="background-color: #e0f2fe; border: 1px solid #bae6fd; padding: 12px; border-radius: 6px; margin: 15px 0; color: #0369a1;">
             <strong>Tracking Number:</strong> ${order.trackingNumber}
@@ -190,7 +207,7 @@ async function sendStatusUpdateNotification(customerEmail, order) {
       statusColor = '#ef4444';
       break;
     case 'Returned':
-      statusText = 'An item return has been logged for this order.';
+      statusText = 'Your order has been returned. The product price has been refunded directly to your user wallet.';
       statusColor = '#6b7280';
       break;
     default:

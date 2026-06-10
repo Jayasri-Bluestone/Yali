@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Pagination } from './Pagination';
+import { API_URL } from '../../config';
+import { XCircle } from 'lucide-react';
 
 export function OrdersTab({
   filteredOrders,
@@ -12,6 +14,28 @@ export function OrdersTab({
 }) {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+  
+  const [deliveryPartners, setDeliveryPartners] = useState([]);
+  const [trackingModalOpen, setTrackingModalOpen] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null); // { orderId, newStatus }
+  const [trackingForm, setTrackingForm] = useState({ trackingNumber: '', trackingLink: '', deliveryPartner: '' });
+
+  useEffect(() => {
+    const fetchPartners = async () => {
+      try {
+        const res = await fetch(`${API_URL}/delivery-partners`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('yali_token')}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDeliveryPartners(data.filter(p => p.status === 'active'));
+        }
+      } catch (err) {
+        console.error('Failed to fetch delivery partners', err);
+      }
+    };
+    fetchPartners();
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -47,16 +71,26 @@ export function OrdersTab({
                 </td>
                 <td className="p-4">
                   <div className="font-bold text-gray-900">₹{(o.total || 0).toFixed(2)}</div>
-                  <div className="text-xs text-gray-500">{o.items?.map(it => `${it.name} (x${it.quantity})`).join(', ')}</div>
+                  <div className="text-xs text-gray-500">{o.items?.map(it => `${it.name} (x${it.quantity})${it.variant_desc ? ' [' + it.variant_desc + ']' : ''}`).join(', ')}</div>
                 </td>
                 <td className="p-4">
                   <select
                     value={o.status || 'Pending'}
-                    onChange={(e) => handleOrderStatusChange(o.order_id, e.target.value)}
+                    onChange={(e) => {
+                      const newStatus = e.target.value;
+                      if (['Packed', 'Shipped', 'Out for Delivery'].includes(newStatus)) {
+                        setPendingStatusChange({ orderId: o.order_id, newStatus });
+                        setTrackingForm({ trackingNumber: o.tracking_number || '', trackingLink: o.tracking_link || '', deliveryPartner: o.delivery_partner || '' });
+                        setTrackingModalOpen(true);
+                      } else {
+                        handleOrderStatusChange(o.order_id, newStatus);
+                      }
+                    }}
                     className="px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
                   >
                     <option value="Pending">Pending</option>
                     <option value="Confirmed">Confirmed</option>
+                    <option value="Packed">Packed</option>
                     <option value="Shipped">Shipped</option>
                     <option value="Out for Delivery">Out for Delivery</option>
                     <option value="Delivered">Delivered</option>
@@ -91,13 +125,32 @@ export function OrdersTab({
                   />
                 </td>
                 <td className="p-4 text-right">
-                  <input
-                    type="text"
-                    placeholder="Tracking Code"
-                    defaultValue={o.tracking_number || ''}
-                    onBlur={(e) => handleTrackingUpdate(o.order_id, e.target.value)}
-                    className="w-32 px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
-                  />
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Tracking Code"
+                      defaultValue={o.tracking_number || ''}
+                      onBlur={(e) => handleTrackingUpdate(o.order_id, { trackingNumber: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 mb-1"
+                    />
+                    <input
+                      type="url"
+                      placeholder="Tracking Link"
+                      defaultValue={o.tracking_link || ''}
+                      onBlur={(e) => handleTrackingUpdate(o.order_id, { trackingLink: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 mb-1"
+                    />
+                    <select
+                      defaultValue={o.delivery_partner || ''}
+                      onChange={(e) => handleTrackingUpdate(o.order_id, { deliveryPartner: e.target.value })}
+                      className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 mb-1 bg-white cursor-pointer"
+                    >
+                      <option value="">-- Partner --</option>
+                      {deliveryPartners.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -114,6 +167,84 @@ export function OrdersTab({
         totalPages={totalPages} 
         onPageChange={setCurrentPage} 
       />
+
+      {trackingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="text-xl font-black text-gray-900">
+                Tracking Details for {pendingStatusChange?.newStatus}
+              </h3>
+              <button onClick={() => setTrackingModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleOrderStatusChange(pendingStatusChange.orderId, pendingStatusChange.newStatus, {
+                trackingNumber: trackingForm.trackingNumber,
+                trackingLink: trackingForm.trackingLink,
+                deliveryPartner: trackingForm.deliveryPartner
+              });
+              setTrackingModalOpen(false);
+            }} className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Delivery Partner</label>
+                  <select
+                    required
+                    value={trackingForm.deliveryPartner}
+                    onChange={(e) => setTrackingForm({ ...trackingForm, deliveryPartner: e.target.value })}
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0066cc] focus:border-transparent outline-none font-medium text-gray-700 cursor-pointer"
+                  >
+                    <option value="">-- Select Partner --</option>
+                    {deliveryPartners.map(p => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Tracking Code / AWB</label>
+                  <input
+                    type="text"
+                    value={trackingForm.trackingNumber}
+                    onChange={(e) => setTrackingForm({ ...trackingForm, trackingNumber: e.target.value })}
+                    placeholder="e.g. FDE-12345678"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0066cc] focus:border-transparent transition-all outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Tracking Link</label>
+                  <input
+                    type="url"
+                    value={trackingForm.trackingLink}
+                    onChange={(e) => setTrackingForm({ ...trackingForm, trackingLink: e.target.value })}
+                    placeholder="https://track.example.com/123"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0066cc] focus:border-transparent transition-all outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTrackingModalOpen(false)}
+                  className="flex-1 px-4 py-3 border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-[#0066cc] text-white font-bold rounded-xl hover:bg-[#0052a3] transition-colors cursor-pointer"
+                >
+                  Confirm Status
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

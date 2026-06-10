@@ -1,6 +1,7 @@
 import { X, Download, Printer, Check } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { formatINR } from '../utils/currency';
+import html2pdf from "html2pdf.js";
 
 export function InvoiceModal({
   isOpen,
@@ -23,7 +24,8 @@ export function InvoiceModal({
   const { showToast } = useToast();
 
   const handleDownload = () => {
-    showToast('Invoice PDF download started!', 'success');
+    showToast('Please select "Save as PDF" in the print dialog.', 'info');
+    setTimeout(() => window.print(), 500);
   };
 
   const handlePrint = () => {

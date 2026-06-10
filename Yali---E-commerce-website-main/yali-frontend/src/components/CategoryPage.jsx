@@ -493,6 +493,7 @@ export function CategoryPage({
 
   const [sidebarFilters, setSidebarFilters] = useState({
     categories: [],
+    brands: [],
     priceMin: '',
     priceMax: '',
     ratings: [],
@@ -533,12 +534,22 @@ export function CategoryPage({
         });
   }, [allProducts, activeSubCat]);
 
+  const availableBrands = useMemo(() => {
+    const brands = new Set();
+    filteredBySubCat.forEach(p => {
+      if (p.brand) brands.add(p.brand);
+    });
+    return Array.from(brands);
+  }, [filteredBySubCat]);
+
   // Apply Sidebar Filters
   const fullyFiltered = useMemo(() => {
     return filteredBySubCat.filter(p => {
       // We don't filter by 'category' again because we are already in a specific category page,
       // but if we had sub-category checkboxes in the sidebar, we'd do it here.
       // For now we just apply price, rating, discount.
+
+      if (sidebarFilters.brands?.length > 0 && !sidebarFilters.brands.includes(p.brand)) return false;
 
       const price = parseFloat(p.price);
       if (sidebarFilters.priceMin && price < parseFloat(sidebarFilters.priceMin)) return false;
@@ -569,6 +580,7 @@ export function CategoryPage({
     if (sortBy === 'price-asc') sorted.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
     else if (sortBy === 'price-desc') sorted.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
     else if (sortBy === 'rating') sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    else if (sortBy === 'newest') sorted.sort((a, b) => b.id - a.id);
     return sorted;
   }, [fullyFiltered, sortBy]);
 
@@ -805,6 +817,7 @@ export function CategoryPage({
               <select value={sortBy} onChange={e => setSortBy(e.target.value)}
                 className="text-sm border border-gray-200 bg-white rounded-xl px-3 py-2 font-semibold text-gray-700 focus:outline-none cursor-pointer">
                 <option value="default">Sort: Default</option>
+                <option value="newest">Newest Arrivals</option>
                 <option value="price-asc">Price: Low → High</option>
                 <option value="price-desc">Price: High → Low</option>
                 <option value="rating">Top Rated</option>
@@ -831,6 +844,7 @@ export function CategoryPage({
             <FilterSidebar 
               filters={sidebarFilters}
               onFilterChange={setSidebarFilters}
+              availableBrands={availableBrands}
               showCategoryFilter={false} // Hiding category since we are already in one
             />
           </div>

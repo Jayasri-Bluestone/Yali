@@ -1,5 +1,5 @@
 import { X, CreditCard, Wallet, Building2, Smartphone, ChevronRight, Lock, Tag, ArrowLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { API_URL } from '../config';
@@ -12,6 +12,54 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
+  
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [saveAddressToAccount, setSaveAddressToAccount] = useState(true);
+  
+
+  useEffect(() => {
+    if (token) {
+      fetch(`${API_URL}/addresses`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setSavedAddresses(data);
+          const defaultAddr = data.find(a => a.is_default) || data[0];
+          setSelectedAddressId(defaultAddr.id);
+          setShippingAddress({
+            name: defaultAddr.full_name,
+            phone: defaultAddr.phone,
+            address: defaultAddr.address_line,
+            city: defaultAddr.city,
+            state: defaultAddr.state,
+            pincode: defaultAddr.pincode
+          });
+        } else {
+          setIsAddingNew(true);
+        }
+      })
+      .catch(console.error);
+    } else {
+      setIsAddingNew(true);
+    }
+  }, [token]);
+
+  const handleSelectAddress = (addr) => {
+    setSelectedAddressId(addr.id);
+    setIsAddingNew(false);
+    setShippingAddress({
+      name: addr.full_name,
+      phone: addr.phone,
+      address: addr.address_line,
+      city: addr.city,
+      state: addr.state,
+      pincode: addr.pincode
+    });
+  };
   
   // Animated success state
   const [showSuccessAnim, setShowSuccessAnim] = useState(false);
@@ -80,7 +128,27 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
         body: JSON.stringify({
           address: fullAddress,
           paymentMethod: paymentMethod === 'card' ? 'CARD' : paymentMethod.toUpperCase(),
-          items: items,
+          items: items.map(it => {
+            let vDesc = null;
+            let vId = null;
+            if (it.selected_variant) {
+              try {
+                const v = typeof it.selected_variant === 'string' ? JSON.parse(it.selected_variant) : it.selected_variant;
+                if (v) {
+                  vId = v.id;
+                  vDesc = Object.entries(v.attributes || {}).map(([k, val]) => `${k}: ${val}`).join(' | ');
+                }
+              } catch(e) {}
+            } else if (it.selectedVariant) { // From Buy Now
+              vId = it.selectedVariant.id;
+              vDesc = Object.entries(it.selectedVariant.attributes || {}).map(([k, val]) => `${k}: ${val}`).join(' | ');
+            }
+            return {
+              ...it,
+              variant_id: vId,
+              variant_desc: vDesc
+            };
+          }),
           subtotal: subtotal,
           tax: tax,
           shipping: shipping,
@@ -89,6 +157,27 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
           appliedCoupon: appliedCoupon
         })
       });
+
+      // Save new address to account if checkbox is checked
+      if (isAddingNew && saveAddressToAccount) {
+        fetch(`${API_URL}/addresses`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: 'Home',
+            full_name: shippingAddress.name,
+            phone: shippingAddress.phone,
+            address_line: shippingAddress.address,
+            city: shippingAddress.city,
+            state: shippingAddress.state,
+            pincode: shippingAddress.pincode,
+            is_default: savedAddresses.length === 0
+          })
+        }).catch(console.error); // Fire and forget
+      }
 
       const resData = await response.json();
       if (!response.ok) {
@@ -238,6 +327,22 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
     );
   }
 
+  const ERROR_IMG_SRC = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODgiIGhlaWdodD0iODgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBvcGFjaXR5PSIuMyIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIzLjciPjxyZWN0IHg9IjE2IiB5PSIxNiIgd2lkdGg9IjU2IiBoZWlnaHQ9IjU2IiByeD0iNiIvPjxwYXRoIGQ9Im0xNiA1OCAxNi0xOCAzMiAzMiIvPjxjaXJjbGUgY3g9IjUzIiBjeT0iMzUiIHI9IjciLz48L3N2Zz4KCg==';
+  
+  const resolveItemImage = (item) => {
+    let img = item.images?.[0] || item.image;
+    if (typeof img === 'string') {
+      if (img.startsWith('[')) {
+        try {
+          const arr = JSON.parse(img);
+          if (Array.isArray(arr) && arr.length > 0) img = arr[0];
+        } catch(e) {}
+      }
+      if (typeof img === 'string') return img.replace(/:\d+$/, '');
+    }
+    return img || ERROR_IMG_SRC;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
@@ -294,70 +399,122 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
               {step === 'address' && (
                 <div className="bg-white border border-gray-200 rounded-xl p-6">
                   <h3 className="text-xl font-bold mb-4">Shipping Address</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                      <input
-                        type="text"
-                        value={shippingAddress.name}
-                        onChange={(e) => setShippingAddress({ ...shippingAddress, name: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                        placeholder="John Doe"
-                      />
+                  
+                  {savedAddresses.length > 0 && (
+                    <div className="mb-6 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {savedAddresses.map(addr => (
+                          <div 
+                            key={addr.id}
+                            onClick={() => handleSelectAddress(addr)}
+                            className={`p-4 border rounded-xl cursor-pointer transition-colors relative ${selectedAddressId === addr.id && !isAddingNew ? 'border-[#0066cc] bg-blue-50/50 shadow-sm' : 'border-gray-200 hover:border-[#0066cc]/50 hover:bg-gray-50'}`}
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="bg-gray-200 text-gray-800 text-[10px] uppercase font-bold px-2 py-0.5 rounded">{addr.title}</span>
+                              <span className="font-bold text-sm text-gray-900">{addr.full_name}</span>
+                            </div>
+                            <p className="text-xs text-gray-600 line-clamp-1">{addr.address_line}</p>
+                            <p className="text-xs text-gray-600">{addr.city}, {addr.state} {addr.pincode}</p>
+                            <p className="text-xs font-medium text-gray-800 mt-2">{addr.phone}</p>
+                            {selectedAddressId === addr.id && !isAddingNew && (
+                              <div className="absolute top-4 right-4 w-5 h-5 bg-[#0066cc] rounded-full flex items-center justify-center">
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <button 
+                        onClick={() => {
+                          setIsAddingNew(true);
+                          setSelectedAddressId(null);
+                          setShippingAddress({ name: '', phone: '', address: '', city: '', state: '', pincode: '' });
+                        }}
+                        className={`text-sm font-bold w-full py-3 rounded-xl border-2 border-dashed transition-colors ${isAddingNew ? 'border-[#0066cc] text-[#0066cc] bg-blue-50/30' : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'}`}
+                      >
+                        + Add New Address
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                      <input
-                        type="tel"
-                        value={shippingAddress.phone}
-                        onChange={(e) => setShippingAddress({ ...shippingAddress, phone: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                        placeholder="+1 (555) 123-4567"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                      <textarea
-                        value={shippingAddress.address}
-                        onChange={(e) => setShippingAddress({ ...shippingAddress, address: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                        rows={3}
-                        placeholder="Street address, apartment, suite, etc."
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
+                  )}
+
+                  {isAddingNew && (
+                    <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                         <input
                           type="text"
-                          value={shippingAddress.city}
-                          onChange={(e) => setShippingAddress({ ...shippingAddress, city: e.target.value })}
+                          value={shippingAddress.name}
+                          onChange={(e) => setShippingAddress({ ...shippingAddress, name: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                          placeholder="New York"
+                          placeholder="John Doe"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                         <input
-                          type="text"
-                          value={shippingAddress.state}
-                          onChange={(e) => setShippingAddress({ ...shippingAddress, state: e.target.value })}
+                          type="tel"
+                          value={shippingAddress.phone}
+                          onChange={(e) => setShippingAddress({ ...shippingAddress, phone: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                          placeholder="NY"
+                          placeholder="+1 (555) 123-4567"
                         />
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                        <textarea
+                          value={shippingAddress.address}
+                          onChange={(e) => setShippingAddress({ ...shippingAddress, address: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                          rows={3}
+                          placeholder="Street address, apartment, suite, etc."
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                          <input
+                            type="text"
+                            value={shippingAddress.city}
+                            onChange={(e) => setShippingAddress({ ...shippingAddress, city: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                            placeholder="New York"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                          <input
+                            type="text"
+                            value={shippingAddress.state}
+                            onChange={(e) => setShippingAddress({ ...shippingAddress, state: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                            placeholder="NY"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">PIN Code</label>
+                        <input
+                          type="text"
+                          value={shippingAddress.pincode}
+                          onChange={(e) => setShippingAddress({ ...shippingAddress, pincode: e.target.value })}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                          placeholder="10001"
+                        />
+                      </div>
+                      
+                      <div className="col-span-full pt-2 flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          id="saveAddress" 
+                          checked={saveAddressToAccount}
+                          onChange={(e) => setSaveAddressToAccount(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300 text-[#0066cc] focus:ring-[#0066cc]"
+                        />
+                        <label htmlFor="saveAddress" className="text-sm text-gray-700 font-medium">Save this address to my account for future use</label>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">PIN Code</label>
-                      <input
-                        type="text"
-                        value={shippingAddress.pincode}
-                        onChange={(e) => setShippingAddress({ ...shippingAddress, pincode: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                        placeholder="10001"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -528,10 +685,27 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                         {items.map((item, idx) => (
                           <div key={idx} className="flex gap-4 p-4 border border-gray-100 rounded-xl bg-gray-50">
                             <div className="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 p-1">
-                              <img src={item.images?.[0] || item.image || 'https://via.placeholder.com/150'} alt={item.name} className="w-full h-full object-contain" />
+                              <img 
+                                src={resolveItemImage(item)} 
+                                alt={item.name} 
+                                className="w-full h-full object-contain"
+                                onError={(e) => { e.target.onerror = null; e.target.src = ERROR_IMG_SRC; }}
+                              />
                             </div>
                             <div className="flex-1">
                               <h4 className="font-bold text-gray-900 line-clamp-2">{item.name}</h4>
+                              {(item.selected_variant || item.selectedVariant) && (
+                                <p className="text-xs text-gray-500 mt-1 font-medium">
+                                  {(() => {
+                                    try {
+                                      const v = item.selected_variant 
+                                        ? (typeof item.selected_variant === 'string' ? JSON.parse(item.selected_variant) : item.selected_variant)
+                                        : item.selectedVariant;
+                                      return Object.entries(v.attributes || {}).map(([k, val]) => `${k}: ${val}`).join(' | ');
+                                    } catch(e) { return null; }
+                                  })()}
+                                </p>
+                              )}
                               <p className="text-sm text-gray-500 mt-1">Price: {formatINR(item.price)}</p>
                               <div className="flex items-center justify-between mt-2">
                                 <span className="text-sm font-medium">Qty: {item.quantity}</span>
@@ -557,10 +731,27 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                   {items.map((item, idx) => (
                     <div key={idx} className="flex gap-4">
                       <div className="w-16 h-16 bg-white border border-gray-100 rounded-lg overflow-hidden flex-shrink-0 p-1">
-                        <img src={item.images?.[0] || item.image || 'https://via.placeholder.com/150'} alt={item.name} className="w-full h-full object-contain" />
+                        <img 
+                          src={resolveItemImage(item)} 
+                          alt={item.name} 
+                          className="w-full h-full object-contain"
+                          onError={(e) => { e.target.onerror = null; e.target.src = ERROR_IMG_SRC; }}
+                        />
                       </div>
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <h4 className="text-sm font-semibold text-gray-900 truncate">{item.name}</h4>
+                        {(item.selected_variant || item.selectedVariant) && (
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">
+                            {(() => {
+                              try {
+                                const v = item.selected_variant 
+                                  ? (typeof item.selected_variant === 'string' ? JSON.parse(item.selected_variant) : item.selected_variant)
+                                  : item.selectedVariant;
+                                return Object.entries(v.attributes || {}).map(([k, val]) => `${val}`).join(' | ');
+                              } catch(e) { return null; }
+                            })()}
+                          </p>
+                        )}
                         <div className="text-xs text-gray-500 mt-1 flex items-center justify-between">
                           <span>Qty: {item.quantity}</span>
                           <span className="font-bold text-gray-900">{formatINR(item.price * item.quantity)}</span>

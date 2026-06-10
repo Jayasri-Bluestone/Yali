@@ -16,6 +16,7 @@ export function SearchResultsPage({
   const searchQuery = searchParams.get('q') || '';
   const [filters, setFilters] = useState({
     categories: [],
+    brands: [],
     priceMin: '',
     priceMax: '',
     ratings: [],
@@ -37,7 +38,7 @@ export function SearchResultsPage({
     );
   }, [products, searchQuery]);
 
-  // Extract available categories from text search results for the sidebar
+  // Extract available categories and brands from text search results for the sidebar
   const availableCategories = useMemo(() => {
     const cats = new Set();
     textFiltered.forEach(p => {
@@ -46,11 +47,22 @@ export function SearchResultsPage({
     return Array.from(cats);
   }, [textFiltered]);
 
+  const availableBrands = useMemo(() => {
+    const brands = new Set();
+    textFiltered.forEach(p => {
+      if (p.brand) brands.add(p.brand);
+    });
+    return Array.from(brands);
+  }, [textFiltered]);
+
   // 2. Apply Sidebar Filters
   const fullyFiltered = useMemo(() => {
     return textFiltered.filter(p => {
       // Category filter
       if (filters.categories?.length > 0 && !filters.categories.includes(p.category)) return false;
+      
+      // Brand filter
+      if (filters.brands?.length > 0 && !filters.brands.includes(p.brand)) return false;
       
       // Price filter
       const price = parseFloat(p.price);
@@ -86,6 +98,7 @@ export function SearchResultsPage({
     if (sortBy === 'price-asc') sorted.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
     else if (sortBy === 'price-desc') sorted.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
     else if (sortBy === 'rating') sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    else if (sortBy === 'newest') sorted.sort((a, b) => b.id - a.id);
     return sorted;
   }, [fullyFiltered, sortBy]);
 
@@ -116,6 +129,7 @@ export function SearchResultsPage({
               className="text-sm border border-gray-300 bg-white rounded-xl px-4 py-2 font-semibold text-gray-700 focus:outline-none cursor-pointer"
             >
               <option value="default">Relevance</option>
+              <option value="newest">Newest Arrivals</option>
               <option value="price-asc">Price: Low to High</option>
               <option value="price-desc">Price: High to Low</option>
               <option value="rating">Top Rated</option>
@@ -146,6 +160,7 @@ export function SearchResultsPage({
             filters={filters}
             onFilterChange={setFilters}
             availableCategories={availableCategories}
+            availableBrands={availableBrands}
             showCategoryFilter={true}
           />
         </div>
