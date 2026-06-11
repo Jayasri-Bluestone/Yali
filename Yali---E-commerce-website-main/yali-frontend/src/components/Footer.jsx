@@ -46,7 +46,7 @@ export function Footer() {
             <h3 className="text-white font-semibold mb-4">Customer Service</h3>
             <ul className="space-y-2 text-sm">
               <li><Link to="/page/help-center" className="hover:text-[#10b981] transition-colors">Help Center</Link></li>
-              <li><Link to="/page/track-order" className="hover:text-[#10b981] transition-colors">Track Order</Link></li>
+              <li><Link to="/my-orders" className="hover:text-[#10b981] transition-colors">Track Order</Link></li>
               <li><Link to="/page/returns-refunds" className="hover:text-[#10b981] transition-colors">Returns & Refunds</Link></li>
               <li><Link to="/page/shipping-info" className="hover:text-[#10b981] transition-colors">Shipping Info</Link></li>
               <li><Link to="/page/payment-methods" className="hover:text-[#10b981] transition-colors">Payment Methods</Link></li>
@@ -62,8 +62,6 @@ export function Footer() {
               <li><Link to="/page/careers" className="hover:text-[#10b981] transition-colors">Careers</Link></li>
               <li><Link to="/page/affiliate" className="hover:text-[#10b981] transition-colors">Affiliate Program</Link></li>
               <li><Link to="/page/sell-on-yali" className="hover:text-[#10b981] transition-colors">Sell on YALI</Link></li>
-              <li><Link to="/page/press-news" className="hover:text-[#10b981] transition-colors">Press & News</Link></li>
-              <li><Link to="/page/blog" className="hover:text-[#10b981] transition-colors">Blog</Link></li>
             </ul>
           </div>
 
@@ -106,7 +104,7 @@ export function Footer() {
             <div className="text-center md:text-left">
               © 2026 YALI. All rights reserved.
             </div>
-            <div className="flex gap-6">
+            <div className="flex flex-wrap justify-center gap-4 md:gap-6">
               <Link to="/page/privacy-policy" className="hover:text-[#10b981] transition-colors">Privacy Policy</Link>
               <Link to="/page/terms" className="hover:text-[#10b981] transition-colors">Terms of Service</Link>
               <Link to="/page/cookie-policy" className="hover:text-[#10b981] transition-colors">Cookie Policy</Link>

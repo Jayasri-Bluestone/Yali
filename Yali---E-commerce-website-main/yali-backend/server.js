@@ -1067,6 +1067,19 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
       items
     };
 
+    // Trigger in-app notification
+    const notificationTitle = `Order ${status}`;
+    let notificationMessage = `Your order #${orderId} is now ${status}.`;
+    const finalTracking = trackingNumber !== undefined ? trackingNumber : order.tracking_number;
+    if (status === 'Shipped' && finalTracking) {
+      notificationMessage += ` Tracking number: ${finalTracking}`;
+    }
+    
+    await pool.query(
+      'INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)',
+      [order.customer_id, notificationTitle, notificationMessage]
+    );
+
     sendStatusUpdateNotification(order.customer_email, updatedOrder);
 
     res.json({ message: 'Order status updated successfully' });
@@ -1389,6 +1402,52 @@ app.delete('/yali_api/addresses/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Delete address error:', error);
     res.status(500).json({ error: 'Server error deleting address' });
+  }
+});
+
+// -------------------------------------------------------------
+// 🔔 NOTIFICATIONS ROUTES
+// -------------------------------------------------------------
+
+// Fetch user notifications
+app.get('/yali_api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const [notifications] = await pool.query(
+      'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC',
+      [req.user.id]
+    );
+    res.json(notifications);
+  } catch (error) {
+    console.error('Fetch notifications error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Mark single notification as read
+app.put('/yali_api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]
+    );
+    res.json({ message: 'Notification marked as read' });
+  } catch (error) {
+    console.error('Update notification error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Mark all notifications as read
+app.put('/yali_api/notifications/read-all', authenticateToken, async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE notifications SET is_read = TRUE WHERE user_id = ?',
+      [req.user.id]
+    );
+    res.json({ message: 'All notifications marked as read' });
+  } catch (error) {
+    console.error('Update all notifications error:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -2006,7 +2065,7 @@ app.patch('/yali_api/admin/:entity/:id/status', authenticateToken, async (req, r
 app.get('/yali_api/cart', authenticateToken, async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT ci.id, ci.user_id, ci.product_id, ci.selected_variant, ci.quantity, ci.created_at,
+      SELECT ci.id, ci.user_id, ci.product_id, ci.selected_variant, ci.quantity, ci.status, ci.created_at,
              p.name, p.price, p.original_price, p.image, p.category, p.stock, p.badge, p.unique_id
       FROM cart_items ci
       JOIN products p ON ci.product_id = p.id
@@ -2028,7 +2087,7 @@ app.post('/yali_api/cart', authenticateToken, async (req, res) => {
   try {
     // Check if item already in cart
     const [existing] = await pool.query(
-      'SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ? AND (selected_variant = ? OR (selected_variant IS NULL AND ? IS NULL))',
+      'SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ? AND (selected_variant = ? OR (selected_variant IS NULL AND ? IS NULL)) AND status = "active"',
       [req.user.id, product_id, selected_variant || null, selected_variant || null]
     );
 
@@ -2039,7 +2098,7 @@ app.post('/yali_api/cart', authenticateToken, async (req, res) => {
       res.json({ message: 'Cart updated', id: existing[0].id });
     } else {
       const [result] = await pool.query(
-        'INSERT INTO cart_items (user_id, product_id, selected_variant, quantity) VALUES (?, ?, ?, ?)',
+        'INSERT INTO cart_items (user_id, product_id, selected_variant, quantity, status) VALUES (?, ?, ?, ?, "active")',
         [req.user.id, product_id, selected_variant || null, quantity || 1]
       );
       res.status(201).json({ message: 'Added to cart', id: result.insertId });
@@ -2067,6 +2126,34 @@ app.put('/yali_api/cart/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Save cart item for later
+app.put('/yali_api/cart/:id/save-for-later', authenticateToken, async (req, res) => {
+  try {
+    const [existing] = await pool.query('SELECT * FROM cart_items WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Cart item not found' });
+
+    await pool.query('UPDATE cart_items SET status = "saved" WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Saved for later' });
+  } catch (error) {
+    console.error('Save for later error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Move cart item back to cart
+app.put('/yali_api/cart/:id/move-to-cart', authenticateToken, async (req, res) => {
+  try {
+    const [existing] = await pool.query('SELECT * FROM cart_items WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Cart item not found' });
+
+    await pool.query('UPDATE cart_items SET status = "active" WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Moved to cart' });
+  } catch (error) {
+    console.error('Move to cart error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Remove item from cart
 app.delete('/yali_api/cart/:id', authenticateToken, async (req, res) => {
   try {
@@ -2074,6 +2161,49 @@ app.delete('/yali_api/cart/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'Removed from cart' });
   } catch (error) {
     console.error('Remove from cart error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// 📍 PINCODE SERVICEABILITY (MOCK)
+// -------------------------------------------------------------
+app.get('/yali_api/pincodes/check/:pincode', async (req, res) => {
+  const { pincode } = req.params;
+  
+  // Basic mock logic: Assume any 6-digit number is serviceable
+  if (/^\d{6}$/.test(pincode)) {
+    return res.json({
+      serviceable: true,
+      estimated_days: Math.floor(Math.random() * 4) + 2, // 2-5 days
+      message: 'Delivery available in your area.'
+    });
+  } else {
+    return res.json({
+      serviceable: false,
+      message: 'Sorry, we do not deliver to this pincode currently.'
+    });
+  }
+});
+
+// -------------------------------------------------------------
+// 🔗 FREQUENTLY BOUGHT TOGETHER (RELATED PRODUCTS)
+// -------------------------------------------------------------
+app.get('/yali_api/products/:id/related', async (req, res) => {
+  const productId = req.params.id;
+  try {
+    // Fetch product category
+    const [prod] = await pool.query('SELECT category FROM products WHERE id = ?', [productId]);
+    if (prod.length === 0) return res.status(404).json({ error: 'Product not found' });
+    
+    // Fetch 4 related active products from the same category
+    const [related] = await pool.query(
+      'SELECT id, name, price, original_price, image, category, rating FROM products WHERE category = ? AND id != ? AND status = "active" ORDER BY RAND() LIMIT 4',
+      [prod[0].category, productId]
+    );
+    res.json(related);
+  } catch (error) {
+    console.error('Fetch related products error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -2539,6 +2669,80 @@ app.delete('/yali_api/delivery-partners/:id', authenticateToken, async (req, res
     res.json({ message: 'Delivery partner deleted' });
   } catch (error) {
     console.error('Delete delivery partner error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// CAREERS API
+// -------------------------------------------------------------
+
+app.get('/yali_api/careers', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    let isAdmin = false;
+    if (authHeader) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded && (decoded.role === 'admin' || decoded.role === 'superadmin')) {
+          isAdmin = true;
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    let query = 'SELECT * FROM careers ORDER BY created_at DESC';
+    if (!isAdmin) {
+      query = 'SELECT * FROM careers WHERE status = "active" ORDER BY created_at DESC';
+    }
+
+    const [careers] = await pool.query(query);
+    res.json(careers);
+  } catch (error) {
+    console.error('Fetch careers error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/yali_api/careers', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const { title, location, type, description, status } = req.body;
+    const [result] = await pool.query(
+      'INSERT INTO careers (title, location, type, description, status) VALUES (?, ?, ?, ?, ?)',
+      [title, location, type, description, status || 'active']
+    );
+    res.status(201).json({ id: result.insertId, message: 'Career created' });
+  } catch (error) {
+    console.error('Add career error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/yali_api/careers/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const { title, location, type, description, status } = req.body;
+    await pool.query(
+      'UPDATE careers SET title = ?, location = ?, type = ?, description = ?, status = ? WHERE id = ?',
+      [title, location, type, description, status, req.params.id]
+    );
+    res.json({ message: 'Career updated' });
+  } catch (error) {
+    console.error('Update career error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/yali_api/careers/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    await pool.query('DELETE FROM careers WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Career deleted' });
+  } catch (error) {
+    console.error('Delete career error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

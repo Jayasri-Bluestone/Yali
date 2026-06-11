@@ -21,6 +21,8 @@ export function ProductDetailsPage({
   const [pincode, setPincode] = useState('');
   const [deliveryInfo, setDeliveryInfo] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [fbtProducts, setFbtProducts] = useState([]);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
 
   const [reviews, setReviews] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
@@ -73,6 +75,8 @@ export function ProductDetailsPage({
   useEffect(() => {
     if (product) {
       fetchReviews();
+      fetchFbtProducts();
+      updateRecentlyViewed(product);
       setSelectedImage(null);
       setActiveTab('description');
       if (product.variants && product.variants.length > 0) {
@@ -95,6 +99,34 @@ export function ProductDetailsPage({
       console.error(err);
     } finally {
       setLoadingReviews(false);
+    }
+  };
+
+  const fetchFbtProducts = async () => {
+    try {
+      const res = await fetch(`${API_URL}/products/${product.id}/related`);
+      if (res.ok) {
+        const data = await res.json();
+        setFbtProducts(data);
+      }
+    } catch(err) {
+      console.error('Fetch FBT error:', err);
+    }
+  };
+
+  const updateRecentlyViewed = (currentProduct) => {
+    try {
+      const stored = localStorage.getItem('yali_recently_viewed');
+      let viewed = stored ? JSON.parse(stored) : [];
+      viewed = viewed.filter(id => id !== currentProduct.id);
+      viewed.unshift(currentProduct.id);
+      viewed = viewed.slice(0, 10);
+      localStorage.setItem('yali_recently_viewed', JSON.stringify(viewed));
+      
+      const mapped = viewed.map(id => allProducts.find(p => p.id === id)).filter(Boolean);
+      setRecentlyViewed(mapped.filter(p => p.id !== currentProduct.id).slice(0, 5));
+    } catch (e) {
+      console.error('Error updating recently viewed:', e);
     }
   };
 
@@ -162,15 +194,19 @@ export function ProductDetailsPage({
     }
   };
 
-  const checkDelivery = () => {
+  const checkDelivery = async () => {
     if (pincode.length === 6 && !isNaN(pincode)) {
-      const today = new Date();
-      const deliveryDate = new Date(today);
-      deliveryDate.setDate(deliveryDate.getDate() + (product?.delivery_days || 3));
-      setDeliveryInfo({
-        status: 'success',
-        message: `Free delivery by ${deliveryDate.toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}`
-      });
+      setDeliveryInfo({ status: 'loading', message: 'Checking...' });
+      try {
+        const res = await fetch(`${API_URL}/pincodes/check/${pincode}`);
+        const data = await res.json();
+        setDeliveryInfo({
+          status: data.serviceable ? 'success' : 'error',
+          message: data.message + (data.estimated_days ? ` (Est: ${data.estimated_days} days)` : '')
+        });
+      } catch (err) {
+        setDeliveryInfo({ status: 'error', message: 'Failed to check pincode.' });
+      }
     } else {
       setDeliveryInfo({
         status: 'error',
@@ -224,10 +260,10 @@ export function ProductDetailsPage({
 
         {/* Main Product Section */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-12">
-          <div className="flex flex-col md:flex-row">
+          <div className="flex flex-col lg:flex-row">
             
             {/* Left: Image Gallery & Details */}
-            <div className="md:w-1/2 p-6 md:p-8 border-b md:border-b-0 md:border-r border-gray-100 bg-white relative flex flex-col gap-8">
+            <div className="lg:w-1/2 p-6 lg:p-8 border-b lg:border-b-0 lg:border-r border-gray-100 bg-white relative flex flex-col gap-8">
               
               {/* Image Gallery */}
               <div className="flex flex-col md:flex-row gap-4">
@@ -352,7 +388,7 @@ export function ProductDetailsPage({
             </div>
 
             {/* Right: Product Details */}
-            <div className="md:w-1/2 p-6 md:p-12">
+            <div className="lg:w-1/2 p-6 lg:p-12">
               <div className="mb-2">
                 <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-full mb-3">
                   {product.category.replace('-', ' ')}
@@ -620,27 +656,41 @@ export function ProductDetailsPage({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            RELATED PRODUCTS
+            FREQUENTLY BOUGHT TOGETHER
         ══════════════════════════════════════════════════════════ */}
-        {relatedProducts.length > 0 && (
-          <div className="mt-16">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-2xl font-black text-gray-900">Related Products</h2>
-            </div>
-            
+        {fbtProducts.length > 0 && (
+          <div className="mt-16 border-t border-gray-100 pt-10">
+            <h2 className="text-2xl font-black text-gray-900 mb-8">Frequently Bought Together</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {relatedProducts.map(relProduct => (
-                <div key={relProduct.id} className="relative group">
-                  {relProduct.discount && (
-                    <div className="absolute top-2 left-2 z-10 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-md bg-indigo-500">
-                      {relProduct.discount}% OFF
-                    </div>
-                  )}
+              {fbtProducts.map(p => (
+                <div key={p.id} className="relative group">
                   <ProductCard 
-                    product={relProduct} 
+                    product={p} 
                     onAddToCart={onAddToCart} 
-                    onProductClick={(p) => navigate(`/product/${p.id}`)}
-                    isWishlisted={wishlistItems.some(i => i.id === relProduct.id)} 
+                    onProductClick={(prod) => navigate(`/product/${prod.id}`)}
+                    isWishlisted={wishlistItems.some(i => i.id === p.id)} 
+                    onToggleWishlist={onToggleWishlist} 
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            RECENTLY VIEWED
+        ══════════════════════════════════════════════════════════ */}
+        {recentlyViewed.length > 0 && (
+          <div className="mt-16 border-t border-gray-100 pt-10">
+            <h2 className="text-2xl font-black text-gray-900 mb-8">Recently Viewed</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {recentlyViewed.map(p => (
+                <div key={p.id} className="relative group">
+                  <ProductCard 
+                    product={p} 
+                    onAddToCart={onAddToCart} 
+                    onProductClick={(prod) => navigate(`/product/${prod.id}`)}
+                    isWishlisted={wishlistItems.some(i => i.id === p.id)} 
                     onToggleWishlist={onToggleWishlist} 
                   />
                 </div>

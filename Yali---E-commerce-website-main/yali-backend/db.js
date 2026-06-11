@@ -151,6 +151,19 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 4.8 Create Careers Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS careers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        location VARCHAR(255) NOT NULL,
+        type VARCHAR(100) NOT NULL,
+        description TEXT,
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // 5. Create Order Items Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS order_items (
@@ -382,11 +395,18 @@ async function initDB() {
         product_id INT NOT NULL,
         selected_variant VARCHAR(255) NULL,
         quantity INT DEFAULT 1,
+        status ENUM('active', 'saved') DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    try {
+      await connection.query("ALTER TABLE cart_items ADD COLUMN status ENUM('active', 'saved') DEFAULT 'active'");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add status to cart_items:', e.message);
+    }
 
     // 12. Create Wishlist Table
     await connection.query(`
@@ -436,6 +456,19 @@ async function initDB() {
     } catch (e) {
       console.warn('Could not modify media to MEDIUMTEXT in product_reviews:', e.message);
     }
+
+    // 15. Create Notifications Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
 
     console.log('Tables verified/created successfully.');
 

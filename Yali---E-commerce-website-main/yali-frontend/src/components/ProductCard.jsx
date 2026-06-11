@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { formatINR } from '../utils/currency';
 
-export function ProductCard({ product, onAddToCart, onProductClick, isWishlisted, onToggleWishlist }) {
+export function ProductCard({ product, onAddToCart, onProductClick, isWishlisted, onToggleWishlist, isNew }) {
   return (
     <div
       onClick={() => onProductClick?.(product)}
@@ -16,12 +16,19 @@ export function ProductCard({ product, onAddToCart, onProductClick, isWishlisted
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
-        {/* Badges */}
-        {product.badge && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-semibold">
-            {product.badge}
-          </div>
-        )}
+        {/* Badges - Left Side Stack */}
+        <div className="absolute top-2 left-2 flex flex-col items-start gap-1 z-10">
+          {isNew && (
+            <span className="bg-violet-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+              New
+            </span>
+          )}
+          {product.badge && (
+            <span className="bg-red-500 text-white px-2 py-1 rounded text-xs font-semibold shadow-sm">
+              {product.badge}
+            </span>
+          )}
+        </div>
         {product.discount && (
           <div className="absolute top-2 right-2 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white px-2 py-1 rounded text-xs font-semibold">
             {product.discount}% OFF

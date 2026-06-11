@@ -117,11 +117,11 @@ export function ProductScrollRow({ products, wishlistItems, onAddToCart, onProdu
 
   useEffect(() => {
     if (!autoScroll || !scrollRef.current) return;
-    
+
     const el = scrollRef.current;
     let timer;
     let isPaused = false;
-    
+
     const startScroll = () => {
       timer = setInterval(() => {
         if (isPaused) return;
@@ -134,17 +134,17 @@ export function ProductScrollRow({ products, wishlistItems, onAddToCart, onProdu
         }
       }, 3000);
     };
-    
+
     startScroll();
-    
+
     const pause = () => isPaused = true;
     const play = () => isPaused = false;
-    
+
     el.addEventListener('mouseenter', pause);
     el.addEventListener('mouseleave', play);
     el.addEventListener('touchstart', pause);
     el.addEventListener('touchend', play);
-    
+
     return () => {
       clearInterval(timer);
       el.removeEventListener('mouseenter', pause);
@@ -181,7 +181,7 @@ function CategoryPageWrapper({ products, videos, onAddToCart, wishlistItems, onT
   const { categoryId } = useParams();
   const navigate = useNavigate();
   const ResolvedPage = resolveCategoryPage(categoryId);
-  
+
   return (
     <ResolvedPage
       categoryKey={categoryId}
@@ -203,6 +203,7 @@ function HomePageSections({
   banners, products, videos, categories, uiCards,
   wishlistItems, onCategoryClick, onAddToCart, onProductClick, onToggleWishlist
 }) {
+  const navigate = useNavigate();
   const countdown = useCountdown(11);
   const [budgetFilter, setBudgetFilter] = useState('all');
   const [dynamicSections, setDynamicSections] = useState([]);
@@ -242,7 +243,7 @@ function HomePageSections({
   });
 
   const flashDeals = products.filter(p => p.stock > 0 && p.discount > 0).slice(0, 8);
-  const trendingProducts = [...products].sort((a,b) => (b.rating||0) - (a.rating||0)).slice(0, 8);
+  const trendingProducts = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 8);
   const bestSellers = products.filter(p => (p.reviews_count || (Array.isArray(p.reviews) ? p.reviews.length : 0)) > 5 || p.rating >= 4).slice(0, 8);
   const newArrivals = [...products].reverse().slice(0, 8);
   const topPicksMain = products.slice(0, 1)[0];
@@ -275,9 +276,9 @@ function HomePageSections({
     return (
       <div className="flex flex-col gap-2">
         {dynamicSections.map(sec => (
-          <DynamicSectionRenderer 
-            key={sec.id} 
-            section={sec} 
+          <DynamicSectionRenderer
+            key={sec.id}
+            section={sec}
             products={products}
             videos={videos}
             banners={banners}
@@ -367,7 +368,7 @@ function HomePageSections({
       {/* ── 5. DEAL OF THE DAY (Amazon-style hero deal) ── */}
       {products.length > 0 && (
         <section className="mt-10">
-          <SectionHeader icon={Clock} iconColor="bg-gradient-to-br from-orange-500 to-red-400" title="Deal of the Day" subtitle="Handpicked offer · Refreshes daily" action="See all deals" onAction={() => {}} />
+          <SectionHeader icon={Clock} iconColor="bg-gradient-to-br from-orange-500 to-red-400" title="Deal of the Day" subtitle="Handpicked offer · Refreshes daily" action="See all deals" onAction={() => { }} />
           <div className="flex flex-col md:flex-row gap-5 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
             {/* Main deal product */}
             {(() => {
@@ -463,7 +464,7 @@ function HomePageSections({
           title="Trending Now"
           subtitle="What everyone is buying"
           action="View all"
-          onAction={() => {}}
+          onAction={() => navigate('/search')}
         />
         <ProductScrollRow products={trendingProducts} wishlistItems={wishlistItems} onAddToCart={onAddToCart} onProductClick={onProductClick} onToggleWishlist={onToggleWishlist} autoScroll={true} />
       </section>
@@ -471,7 +472,7 @@ function HomePageSections({
       {/* ── 8. TOP PICKS FOR YOU (Amazon-style: 1 big + 4 small) ── */}
       {products.length >= 5 && (
         <section className="mt-10">
-          <SectionHeader icon={Star} iconColor="bg-gradient-to-br from-amber-500 to-orange-400" title="Top Picks For You" subtitle="Curated just for you" action="See more" onAction={() => {}} />
+          <SectionHeader icon={Star} iconColor="bg-gradient-to-br from-amber-500 to-orange-400" title="Top Picks For You" subtitle="Curated just for you" action="See more" onAction={() => navigate('/search')} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Big featured card */}
             {topPicksMain && (
@@ -550,7 +551,7 @@ function HomePageSections({
 
       {/* ── 10. BEST SELLERS (horizontal scroll) ── */}
       <section className="mt-10">
-        <SectionHeader icon={Award} iconColor="bg-gradient-to-br from-[#10b981] to-teal-400" title="Best Sellers" subtitle="Most loved by our customers" action="View all" onAction={() => {}} />
+        <SectionHeader icon={Award} iconColor="bg-gradient-to-br from-[#10b981] to-teal-400" title="Best Sellers" subtitle="Most loved by our customers" action="View all" onAction={() => navigate('/search')} />
         <ProductScrollRow products={bestSellers.length > 0 ? bestSellers : products.slice(0, 8)} wishlistItems={wishlistItems} onAddToCart={onAddToCart} onProductClick={onProductClick} onToggleWishlist={onToggleWishlist} />
       </section>
 
@@ -563,11 +564,10 @@ function HomePageSections({
             <button
               key={value}
               onClick={() => setBudgetFilter(value)}
-              className={`px-4 py-1.5 rounded-full text-sm font-bold border transition-all cursor-pointer ${
-                budgetFilter === value
+              className={`px-4 py-1.5 rounded-full text-sm font-bold border transition-all cursor-pointer ${budgetFilter === value
                   ? 'budget-pill-active shadow-md'
                   : 'border-gray-300 text-gray-600 bg-white hover:border-[#0066cc] hover:text-[#0066cc]'
-              }`}
+                }`}
             >
               {label}
             </button>
@@ -585,17 +585,17 @@ function HomePageSections({
 
       {/* ── 12. NEW ARRIVALS ── */}
       <section className="mt-10">
-        <SectionHeader icon={Package} iconColor="bg-gradient-to-br from-violet-500 to-indigo-500" title="New Arrivals" subtitle="Just landed · Fresh picks" action="View all" onAction={() => {}} />
+        <SectionHeader icon={Package} iconColor="bg-gradient-to-br from-violet-500 to-indigo-500" title="New Arrivals" subtitle="Just landed · Fresh picks" action="View all" onAction={() => navigate('/search')} />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {newArrivals.slice(0, 8).map(p => (
-            <div key={p.id} className="relative">
-              <span className="absolute top-2 left-2 z-10 bg-violet-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">New</span>
+            <div key={p.id}>
               <ProductCard
                 product={p}
                 onAddToCart={onAddToCart}
                 onProductClick={onProductClick}
                 isWishlisted={wishlistItems.some(item => item.id === p.id)}
                 onToggleWishlist={onToggleWishlist}
+                isNew={true}
               />
             </div>
           ))}
@@ -647,7 +647,7 @@ function HomePageSections({
 export default function App() {
 
   const { showToast } = useToast();
-  
+
   // View Routing via React Router
   const location = useLocation();
   const [activeCategory, setActiveCategory] = useState('all');
@@ -662,11 +662,11 @@ export default function App() {
   // Wallet State
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [walletTransactions, setWalletTransactions] = useState([]);
-  
+
   // Cart & Orders
   const [cartItems, setCartItems] = useState([]);
   const [checkoutItems, setCheckoutItems] = useState([]);
-  
+
   const navigate = useNavigate();
 
   // Wishlist State
@@ -678,7 +678,7 @@ export default function App() {
   useEffect(() => {
     const trackLocation = async () => {
       if (sessionStorage.getItem('locationPrompted')) return;
-      
+
       sessionStorage.setItem('locationPrompted', 'true');
 
       if ('geolocation' in navigator) {
@@ -721,7 +721,7 @@ export default function App() {
         );
       }
     };
-    
+
     const timer = setTimeout(trackLocation, 1500);
     return () => clearTimeout(timer);
   }, []);
@@ -985,8 +985,8 @@ export default function App() {
       const res = await fetch(`${API_URL}/cart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ 
-          product_id: product.id, 
+        body: JSON.stringify({
+          product_id: product.id,
           quantity: 1,
           selected_variant: product.selectedVariant ? JSON.stringify(product.selectedVariant) : null
         })
@@ -1057,12 +1057,12 @@ export default function App() {
     }
     const cartItem = cartItems.find(item => item.id === productId);
     if (cartItem && cartItem.cart_item_id) {
-       await fetch(`${API_URL}/cart/${cartItem.cart_item_id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ quantity })
-       });
-       fetchCartItems();
+      await fetch(`${API_URL}/cart/${cartItem.cart_item_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ quantity })
+      });
+      fetchCartItems();
     } else {
       setCartItems((prevItems) => prevItems.map((item) => (item.id === productId ? { ...item, quantity } : item)));
     }
@@ -1071,11 +1071,11 @@ export default function App() {
   const handleRemoveItem = async (productId) => {
     const cartItem = cartItems.find(item => item.id === productId);
     if (cartItem && cartItem.cart_item_id) {
-       await fetch(`${API_URL}/cart/${cartItem.cart_item_id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-       });
-       fetchCartItems();
+      await fetch(`${API_URL}/cart/${cartItem.cart_item_id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchCartItems();
     } else {
       setCartItems((prevItems) => prevItems.filter((item) => item.id !== productId));
     }
@@ -1145,19 +1145,19 @@ export default function App() {
     try {
       const res = await fetch(`${API_URL}/wallet/add-money`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ amount })
       });
-      
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to deposit money');
 
       setUserData(prev => ({ ...prev, wallet: data.newBalance }));
       showToast(`Successfully added ₹${amount} to your wallet!`, 'success');
-      
+
       fetchTransactions();
     } catch (e) {
       showToast(e.message, 'error');
@@ -1175,8 +1175,13 @@ export default function App() {
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const isAdminRoute = location.pathname.startsWith('/admin');
+  const hasAdminAccess = userData?.role === 'admin' || userData?.role === 'vendor';
 
   if (isAdminRoute) {
+    if (isLoggedIn && !hasAdminAccess) {
+      return <Navigate to="/" replace />;
+    }
+
     return !isLoggedIn ? (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-between">
         <AdminLogin
@@ -1244,6 +1249,8 @@ export default function App() {
             }
           }}
           onLogoutClick={handleLogout}
+          products={products}
+          categoriesList={categories}
         />
 
         {/* Store view routes */}
@@ -1302,8 +1309,9 @@ export default function App() {
                     items={cartItems}
                     onUpdateQuantity={handleUpdateQuantity}
                     onRemoveItem={handleRemoveItem}
+                    onRefreshCart={fetchCartItems}
                     onProceedToCheckout={() => {
-                      setCheckoutItems(cartItems);
+                      setCheckoutItems(cartItems.filter(item => item.status !== 'saved'));
                       navigate('/checkout');
                     }}
                   />
@@ -1334,15 +1342,15 @@ export default function App() {
                   />
                 } />
                 <Route path="/orders" element={
-                  <MyOrdersPage 
-                    orders={orders} 
-                    token={token} 
-                    refreshOrders={fetchOrders} 
+                  <MyOrdersPage
+                    orders={orders}
+                    token={token}
+                    refreshOrders={fetchOrders}
                     refreshUserData={fetchUserData}
-                    API_URL={API_URL} 
+                    API_URL={API_URL}
                   />
                 } />
-                <Route path="/page/:pageId" element={<StaticPage />} />
+                <Route path="/page/:slug" element={<StaticPage />} />
                 <Route path="/p/:pageId" element={
                   <CustomPage
                     products={activeProducts}

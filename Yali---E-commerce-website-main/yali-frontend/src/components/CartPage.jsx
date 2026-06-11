@@ -1,18 +1,62 @@
-import { X, Plus, Minus, Trash2, ShoppingBag, ArrowLeft } from 'lucide-react';
+import { X, Plus, Minus, Trash2, ShoppingBag, ArrowLeft, BookmarkPlus, BookmarkMinus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { formatINR } from '../utils/currency';
+import { API_URL } from '../config';
+import { useToast } from '../context/ToastContext';
 
 export function CartPage({
   items,
   onUpdateQuantity,
   onRemoveItem,
+  onRefreshCart,
   onProceedToCheckout
 }) {
   const navigate = useNavigate();
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const { showToast } = useToast();
+  
+  const activeItems = items.filter(item => item.status !== 'saved');
+  const savedItems = items.filter(item => item.status === 'saved');
+
+  const subtotal = activeItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const tax = subtotal * 0.1;
   const total = subtotal + tax;
+
+  const handleSaveForLater = async (itemId) => {
+    try {
+      const token = localStorage.getItem('yali_token');
+      const res = await fetch(`${API_URL}/cart/${itemId}/save-for-later`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast('Item saved for later', 'success');
+        if (onRefreshCart) onRefreshCart();
+      } else {
+        showToast('Failed to save item', 'error');
+      }
+    } catch (err) {
+      showToast('Error saving item', 'error');
+    }
+  };
+
+  const handleMoveToCart = async (itemId) => {
+    try {
+      const token = localStorage.getItem('yali_token');
+      const res = await fetch(`${API_URL}/cart/${itemId}/move-to-cart`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast('Item moved to cart', 'success');
+        if (onRefreshCart) onRefreshCart();
+      } else {
+        showToast('Failed to move item', 'error');
+      }
+    } catch (err) {
+      showToast('Error moving item', 'error');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -29,21 +73,21 @@ export function CartPage({
             <ShoppingBag className="w-8 h-8 text-[#0066cc]" />
             <h1 className="text-3xl font-black text-gray-900">Your Cart</h1>
             <span className="bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white px-3 py-1 rounded-full text-sm font-semibold">
-              {items.length} Items
+              {activeItems.length} Items
             </span>
           </div>
         </div>
 
         {/* Cart Items */}
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
-          {items.length === 0 ? (
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden mb-8">
+          {activeItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center px-4">
               <ShoppingBag className="w-24 h-24 text-gray-300 mb-6" />
               <h2 className="text-2xl font-bold text-gray-900 mb-3">Your cart is feeling light</h2>
               <p className="text-gray-500 mb-8 max-w-sm">There is nothing in your cart. Let's add some items.</p>
               <button
                 onClick={() => navigate('/')}
-                className="px-8 py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-bold hover:shadow-lg transition-all"
+                className="px-8 py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-bold hover:shadow-lg transition-all cursor-pointer"
               >
                 Start Shopping
               </button>
@@ -51,7 +95,7 @@ export function CartPage({
           ) : (
             <div className="p-6 sm:p-8">
               <div className="space-y-6">
-                {items.map((item) => (
+                {activeItems.map((item) => (
                   <div key={item.id} className="flex flex-col sm:flex-row gap-6 p-6 border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors bg-gray-50/50">
                     <ImageWithFallback
                       src={item.image}
@@ -96,12 +140,20 @@ export function CartPage({
                           </button>
                         </div>
                         
-                        <button
-                          onClick={() => onRemoveItem(item.id)}
-                          className="flex items-center gap-2 text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl transition-colors font-bold cursor-pointer"
-                        >
-                          <Trash2 className="w-5 h-5" /> Remove
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleSaveForLater(item.cart_item_id || item.id)}
+                            className="flex items-center gap-2 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-xl transition-colors font-bold cursor-pointer"
+                          >
+                            <BookmarkPlus className="w-5 h-5" /> Save
+                          </button>
+                          <button
+                            onClick={() => onRemoveItem(item.id)}
+                            className="flex items-center gap-2 text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl transition-colors font-bold cursor-pointer"
+                          >
+                            <Trash2 className="w-5 h-5" /> Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -111,7 +163,7 @@ export function CartPage({
           )}
 
           {/* Footer */}
-          {items.length > 0 && (
+          {activeItems.length > 0 && (
             <div className="bg-gray-50 p-6 sm:p-8 border-t border-gray-200">
               <div className="max-w-md ml-auto space-y-4">
                 <div className="space-y-3 mb-6">
@@ -120,7 +172,7 @@ export function CartPage({
                     <span>{formatINR(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600 font-medium">
-                    <span>GST (18%)</span>
+                    <span>GST (10%)</span>
                     <span>{formatINR(tax)}</span>
                   </div>
                   <div className="flex justify-between text-2xl font-black text-gray-900 pt-4 border-t border-gray-200">
@@ -130,7 +182,7 @@ export function CartPage({
                 </div>
                 
                 <button
-                  onClick={() => onProceedToCheckout(items)}
+                  onClick={() => onProceedToCheckout(activeItems)}
                   className="w-full py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-black text-lg hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer">
                   Proceed to Checkout
                 </button>
@@ -144,6 +196,54 @@ export function CartPage({
             </div>
           )}
         </div>
+
+        {/* Saved for Later Section */}
+        {savedItems.length > 0 && (
+          <div className="bg-white rounded-3xl shadow-xl overflow-hidden mt-8">
+            <div className="p-6 sm:p-8 border-b border-gray-100">
+              <h2 className="text-2xl font-bold text-gray-900">Saved for Later ({savedItems.length})</h2>
+            </div>
+            <div className="p-6 sm:p-8">
+              <div className="space-y-6">
+                {savedItems.map((item) => (
+                  <div key={item.id} className="flex flex-col sm:flex-row gap-6 p-6 border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors bg-white opacity-80 hover:opacity-100">
+                    <ImageWithFallback
+                      src={item.image}
+                      alt={item.name}
+                      className="w-full sm:w-24 h-24 object-cover rounded-xl shadow-sm grayscale hover:grayscale-0 transition-all"
+                    />
+                    <div className="flex-1 min-w-0 flex flex-col justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1">
+                          {item.name}
+                        </h3>
+                        <span className="text-xl font-black text-gray-600">
+                          {formatINR(item.price)}
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center justify-end gap-2 mt-4 sm:mt-0">
+                        <button
+                          onClick={() => handleMoveToCart(item.cart_item_id || item.id)}
+                          className="flex items-center gap-2 text-[#0066cc] border border-[#0066cc] hover:bg-blue-50 px-4 py-2 rounded-xl transition-colors font-bold cursor-pointer text-sm"
+                        >
+                          <ShoppingBag className="w-4 h-4" /> Move to Cart
+                        </button>
+                        <button
+                          onClick={() => onRemoveItem(item.id)}
+                          className="flex items-center gap-2 text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl transition-colors font-bold cursor-pointer text-sm"
+                        >
+                          <Trash2 className="w-4 h-4" /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

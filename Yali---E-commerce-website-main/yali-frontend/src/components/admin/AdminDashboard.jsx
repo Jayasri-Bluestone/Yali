@@ -21,7 +21,8 @@ import {
   MessageSquare,
   Trash2,
   Truck,
-  RefreshCcw
+  RefreshCcw,
+  Briefcase
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
@@ -44,6 +45,7 @@ import { ReviewsTab } from './ReviewsTab';
 import { PageBuilderTab } from './PageBuilderTab';
 import { DeliveryPartnersTab } from './DeliveryPartnersTab';
 import { RefundsReturnsTab } from './RefundsReturnsTab';
+import { CareersTab } from './CareersTab';
 import { FileUploadInput } from './FileUploadInput';
 import { API_URL } from '../../config';
 
@@ -86,6 +88,7 @@ export function AdminDashboard({
   const activeTab = location.pathname.split('/')[2] || 'dashboard';
   const [productSearch, setProductSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Category view tab state - tracks currently selected category details inside Categories panel
   const [selectedCategoryTab, setSelectedCategoryTab] = useState(isCategoryAdmin ? adminCategory : 'real-estate');
@@ -157,11 +160,11 @@ export function AdminDashboard({
   const totalSales = filteredOrders
     .filter(o => o.status !== 'Cancelled')
     .reduce((sum, o) => sum + (o.total || 0), 0);
-  
+
   const totalOrdersCount = filteredOrders.length;
   const pendingOrdersCount = filteredOrders.filter(o => o.status === 'Pending').length;
   const lowStockCount = filteredProducts.filter(p => (p.stock || 0) < 5).length;
-  
+
   // Tab control lists based on roles
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: TrendingUp, show: true },
@@ -179,7 +182,8 @@ export function AdminDashboard({
     { id: 'locations', label: 'Visitor Locations', icon: MapPin, show: isSuperAdmin },
     { id: 'reviews', label: 'Product Reviews', icon: MessageSquare, show: userData?.role === 'admin' },
     { id: 'delivery-partners', label: 'Delivery Partners', icon: Truck, show: isSuperAdmin },
-    { id: 'refunds-returns', label: 'Refunds & Returns', icon: RefreshCcw, show: userData?.role === 'admin' }
+    { id: 'refunds-returns', label: 'Refunds & Returns', icon: RefreshCcw, show: userData?.role === 'admin' },
+    { id: 'careers', label: 'Careers', icon: Briefcase, show: isSuperAdmin }
   ].filter(t => t.show);
 
   // -------------------------------------------------------------
@@ -192,7 +196,7 @@ export function AdminDashboard({
     filteredProducts.forEach(p => {
       csvContent += `"${p.id}","${p.name.replace(/"/g, '""')}",${p.price},"${p.category}",${p.stock || 0},"${p.badge || ''}"\n`;
     });
-    
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -208,7 +212,7 @@ export function AdminDashboard({
     if (!file) return;
 
     showToast("Simulating CSV read & uploading to backend...", "info");
-    
+
     // Create mock list of items matching database structure
     const mockNewProducts = [
       {
@@ -355,7 +359,7 @@ export function AdminDashboard({
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to delete product');
 
@@ -384,7 +388,7 @@ export function AdminDashboard({
         if (!res.ok) throw new Error(data.error || 'Failed to update status');
 
         showToast(data.message || `Status updated to ${nextStatus}`, 'success');
-        
+
         // Update specific entity without reloading the page
         switch (entity) {
           case 'products': refreshProducts && refreshProducts(); break;
@@ -576,7 +580,7 @@ export function AdminDashboard({
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to delete coupon');
 
@@ -625,9 +629,17 @@ export function AdminDashboard({
 
   return (
     <div className="flex h-screen w-screen bg-gray-100 overflow-hidden font-sans">
-      
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden" 
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* 1. Left Sidebar Navigation */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between shrink-0 border-r border-slate-800 shadow-xl relative z-20 overflow-hidden h-screen">
+      <aside className={`fixed lg:static inset-y-0 left-0 w-64 bg-slate-900 text-white flex flex-col justify-between shrink-0 border-r border-slate-800 shadow-xl z-30 transition-transform duration-300 ease-in-out lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} h-screen`}>
         <div className="flex-1 flex flex-col min-h-0">
           {/* Logo / Portal Branding */}
           <div className="shrink-0 p-6 border-b border-slate-800">
@@ -656,12 +668,14 @@ export function AdminDashboard({
               return (
                 <button
                   key={tab.id}
-                  onClick={() => navigate(`/admin/${tab.id}`)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
-                    isActive
+                  onClick={() => {
+                    navigate(`/admin/${tab.id}`);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-xs transition-all cursor-pointer ${isActive
                       ? 'bg-gradient-to-r from-purple-700 to-indigo-650 text-white shadow-md shadow-indigo-900/30'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
-                  }`}
+                    }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span>{tab.label}</span>
@@ -695,22 +709,32 @@ export function AdminDashboard({
 
       {/* 2. Right-hand Main Content Section */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
-        
+
         {/* Main Content Header */}
-        <header className="bg-white border-b border-gray-200 px-8 py-4.5 flex justify-between items-center shrink-0 shadow-sm">
-          <div>
-            <h2 className="text-xl font-black text-gray-900 capitalize tracking-wide">
+        <header className="bg-white border-b border-gray-200 px-4 md:px-8 py-4.5 flex justify-between items-center shrink-0 shadow-sm gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div>
+              <h2 className="text-xl font-black text-gray-900 capitalize tracking-wide">
               {tabs.find(t => t.id === activeTab)?.label} View
             </h2>
             <p className="text-xs text-gray-400 mt-0.5 font-medium">
-              {isVendor 
+              {isVendor
                 ? `Merchant console for: ${userData?.vendorDetails?.companyName || userData?.name}`
-                : (isCategoryAdmin 
-                    ? `Scoped Category Admin Portal - Managing Category: '${adminCategory}'`
-                    : 'System-wide Super-Administrator Dashboard')}
+                : (isCategoryAdmin
+                  ? `Scoped Category Admin Portal - Managing Category: '${adminCategory}'`
+                  : 'System-wide Super-Administrator Dashboard')}
             </p>
           </div>
-          
+          </div>
+
           <button
             onClick={handleExportCSV}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer text-xs"
@@ -722,7 +746,7 @@ export function AdminDashboard({
 
         {/* Content Workspace Area */}
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50/70">
-          
+
           <Routes>
             <Route path="/admin/dashboard" element={
               <DashboardTab
@@ -890,9 +914,9 @@ export function AdminDashboard({
 
             {isSuperAdmin && (
               <Route path="/admin/ui-cards" element={
-                <UICardsTab 
-                  token={token} 
-                  showToast={showToast} 
+                <UICardsTab
+                  token={token}
+                  showToast={showToast}
                   uiCards={uiCards}
                   handleToggleStatus={handleToggleStatus}
                 />
@@ -922,7 +946,13 @@ export function AdminDashboard({
                 <LocationsTab token={token} />
               } />
             )}
-            
+
+            {isSuperAdmin && (
+              <Route path="/admin/careers" element={
+                <CareersTab />
+              } />
+            )}
+
             <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
           </Routes>
 
@@ -939,7 +969,7 @@ export function AdminDashboard({
                 <XCircle className="w-6 h-6 text-gray-400" />
               </button>
             </div>
-            
+
             <form onSubmit={handleProductSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -1022,8 +1052,8 @@ export function AdminDashboard({
               <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <div className="flex justify-between items-center">
                   <label className="block text-sm font-bold text-gray-700">Gallery Images (Slider)</label>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       const currentImages = Array.isArray(productForm.images) ? productForm.images : [];
                       setProductForm({ ...productForm, images: [...currentImages, ''] });
@@ -1049,8 +1079,8 @@ export function AdminDashboard({
                         token={token}
                       />
                     </div>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => {
                         const currentImages = [...productForm.images];
                         currentImages.splice(idx, 1);
@@ -1074,8 +1104,8 @@ export function AdminDashboard({
               <div className="space-y-3 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
                 <div className="flex justify-between items-center">
                   <label className="block text-sm font-bold text-indigo-900">Product Variants</label>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       const currentVars = Array.isArray(productForm.variants) ? productForm.variants : [];
                       setProductForm({ ...productForm, variants: [...currentVars, { sku: '', attributes: {}, price: '', stock: '' }] });
@@ -1088,10 +1118,10 @@ export function AdminDashboard({
                 {Array.isArray(productForm.variants) && productForm.variants.map((variant, idx) => (
                   <div key={idx} className="flex flex-wrap gap-2 items-center bg-white p-3 rounded-lg border border-indigo-200 shadow-sm relative group">
                     <div className="w-full sm:w-auto flex-1">
-                      <input 
-                        type="text" 
-                        placeholder="Variant Attributes (e.g. Size: M, Color: Red)" 
-                        value={variant.attributesString !== undefined ? variant.attributesString : Object.entries(variant.attributes || {}).map(([k,v]) => `${k}: ${v}`).join(', ')}
+                      <input
+                        type="text"
+                        placeholder="Variant Attributes (e.g. Size: M, Color: Red)"
+                        value={variant.attributesString !== undefined ? variant.attributesString : Object.entries(variant.attributes || {}).map(([k, v]) => `${k}: ${v}`).join(', ')}
                         onChange={(e) => {
                           const newVars = [...productForm.variants];
                           newVars[idx].attributesString = e.target.value;
@@ -1104,38 +1134,38 @@ export function AdminDashboard({
                           newVars[idx].attributes = attrs;
                           setProductForm({ ...productForm, variants: newVars });
                         }}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                       <div className="text-[9px] text-gray-400 mt-0.5">Format: "Key: Value, Key: Value"</div>
                     </div>
                     <div className="w-24">
-                      <input 
-                        type="number" 
-                        placeholder="Price" 
-                        value={variant.price} 
+                      <input
+                        type="number"
+                        placeholder="Price"
+                        value={variant.price}
                         onChange={(e) => {
                           const newVars = [...productForm.variants];
                           newVars[idx].price = e.target.value;
                           setProductForm({ ...productForm, variants: newVars });
                         }}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
                     <div className="w-24">
-                      <input 
-                        type="number" 
-                        placeholder="Stock" 
-                        value={variant.stock} 
+                      <input
+                        type="number"
+                        placeholder="Stock"
+                        value={variant.stock}
                         onChange={(e) => {
                           const newVars = [...productForm.variants];
                           newVars[idx].stock = e.target.value;
                           setProductForm({ ...productForm, variants: newVars });
                         }}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => {
                         const newVars = [...productForm.variants];
                         newVars.splice(idx, 1);

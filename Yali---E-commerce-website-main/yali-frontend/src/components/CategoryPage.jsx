@@ -491,6 +491,8 @@ export function CategoryPage({
   const [dynamicSections, setDynamicSections] = useState([]);
   const [isLoadingSections, setIsLoadingSections] = useState(true);
 
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
   const [sidebarFilters, setSidebarFilters] = useState({
     categories: [],
     brands: [],
@@ -813,16 +815,25 @@ export function CategoryPage({
           </div>
 
           {allProducts.length > 0 && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button 
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="lg:hidden flex items-center gap-2 text-sm border border-gray-200 bg-white rounded-xl px-3 py-2 font-semibold text-gray-700 focus:outline-none cursor-pointer"
+              >
+                <span className="inline-block w-4 h-4 text-gray-600">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                </span>
+                Filters
+              </button>
               <select value={sortBy} onChange={e => setSortBy(e.target.value)}
                 className="text-sm border border-gray-200 bg-white rounded-xl px-3 py-2 font-semibold text-gray-700 focus:outline-none cursor-pointer">
-                <option value="default">Sort: Default</option>
+                <option value="default">Sort</option>
                 <option value="newest">Newest Arrivals</option>
                 <option value="price-asc">Price: Low → High</option>
                 <option value="price-desc">Price: High → Low</option>
                 <option value="rating">Top Rated</option>
               </select>
-              <div className="flex bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
+              <div className="hidden sm:flex bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
                 <button onClick={() => setViewMode('grid')} title="Grid view"
                   className={`p-2.5 transition-colors cursor-pointer ${viewMode === 'grid' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}
                   style={viewMode === 'grid' ? { background: cfg.accentHex } : {}}>
@@ -838,14 +849,16 @@ export function CategoryPage({
           )}
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex flex-col lg:flex-row gap-6 relative">
           {/* Sidebar */}
-          <div className="hidden lg:block w-64 flex-shrink-0">
+          <div className="lg:w-64 flex-shrink-0">
             <FilterSidebar 
               filters={sidebarFilters}
               onFilterChange={setSidebarFilters}
               availableBrands={availableBrands}
               showCategoryFilter={false} // Hiding category since we are already in one
+              isOpen={isMobileFilterOpen}
+              onClose={() => setIsMobileFilterOpen(false)}
             />
           </div>
 
