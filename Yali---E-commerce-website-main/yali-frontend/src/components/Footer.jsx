@@ -82,19 +82,7 @@ export function Footer() {
                 <span>support@yali.com</span>
               </li>
             </ul>
-            <div className="mt-4">
-              <h4 className="text-white font-medium mb-2 text-sm">Newsletter</h4>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  placeholder="Your email"
-                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm focus:outline-none focus:ring-1 focus:ring-[#0066cc]"
-                />
-                <button className="px-4 py-2 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded font-medium text-sm hover:shadow-lg transition-shadow">
-                  Subscribe
-                </button>
-              </div>
-            </div>
+  
           </div>
         </div>
 

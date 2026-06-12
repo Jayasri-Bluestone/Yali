@@ -402,6 +402,67 @@ app.post('/yali_api/categories', authenticateToken, async (req, res) => {
 });
 
 // -------------------------------------------------------------
+// SUB-CATEGORIES ROUTES
+// -------------------------------------------------------------
+app.get('/yali_api/sub-categories', async (req, res) => {
+  const { category, all } = req.query;
+  let sql = 'SELECT * FROM sub_categories WHERE 1=1';
+  const params = [];
+  if (category) {
+    sql += ' AND category_value = ?';
+    params.push(category);
+  }
+  if (!all) {
+    sql += ' AND status = "active"';
+  }
+  sql += ' ORDER BY display_order ASC, id ASC';
+  try {
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/yali_api/admin/sub-categories', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { category_value, label, emoji, image_url, filter_tag, display_order, status } = req.body;
+  try {
+    await pool.query(
+      'INSERT INTO sub_categories (category_value, label, emoji, image_url, filter_tag, display_order, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [category_value, label, emoji || '', image_url || '', filter_tag, display_order || 0, status || 'active']
+    );
+    res.status(201).json({ message: 'Sub-Category created' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/yali_api/admin/sub-categories/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { category_value, label, emoji, image_url, filter_tag, display_order, status } = req.body;
+  try {
+    await pool.query(
+      'UPDATE sub_categories SET category_value = ?, label = ?, emoji = ?, image_url = ?, filter_tag = ?, display_order = ?, status = ? WHERE id = ?',
+      [category_value, label, emoji || '', image_url || '', filter_tag, display_order || 0, status || 'active', req.params.id]
+    );
+    res.json({ message: 'Sub-Category updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/yali_api/admin/sub-categories/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    await pool.query('DELETE FROM sub_categories WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Sub-Category deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
 // 🛍️ PRODUCT CATALOG ROUTES
 // -------------------------------------------------------------
 
@@ -553,13 +614,14 @@ app.post('/yali_api/products', authenticateToken, async (req, res) => {
     if (variants && Array.isArray(variants) && variants.length > 0) {
       for (const v of variants) {
         await pool.query(
-          'INSERT INTO product_variants (product_id, sku, attributes_json, price, stock) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO product_variants (product_id, sku, attributes_json, price, stock, image) VALUES (?, ?, ?, ?, ?, ?)',
           [
             newId,
             v.sku || null,
             JSON.stringify(v.attributes || {}),
             v.price !== undefined ? parseFloat(v.price) : parseFloat(price),
-            v.stock !== undefined ? parseInt(v.stock) : 0
+            v.stock !== undefined ? parseInt(v.stock) : 0,
+            v.image || null
           ]
         );
       }
@@ -623,13 +685,14 @@ app.put('/yali_api/products/:id', authenticateToken, async (req, res) => {
       await pool.query('DELETE FROM product_variants WHERE product_id = ?', [productId]);
       for (const v of variants) {
         await pool.query(
-          'INSERT INTO product_variants (product_id, sku, attributes_json, price, stock) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO product_variants (product_id, sku, attributes_json, price, stock, image) VALUES (?, ?, ?, ?, ?, ?)',
           [
             productId,
             v.sku || null,
             JSON.stringify(v.attributes || {}),
             v.price !== undefined ? parseFloat(v.price) : (price ? parseFloat(price) : prod.price),
-            v.stock !== undefined ? parseInt(v.stock) : 0
+            v.stock !== undefined ? parseInt(v.stock) : 0,
+            v.image || null
           ]
         );
       }
@@ -2224,7 +2287,7 @@ app.get('/yali_api/admin/carts', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
     const [rows] = await pool.query(`
-      SELECT ci.id, ci.user_id, ci.product_id, ci.selected_variant, ci.quantity, ci.created_at,
+      SELECT ci.id, ci.user_id, ci.product_id, ci.selected_variant, ci.quantity, ci.status, ci.created_at,
              u.name AS customer_name, u.email AS customer_email,
              p.name AS product_name, p.price, p.image, p.category, p.unique_id
       FROM cart_items ci
@@ -2388,6 +2451,21 @@ app.get('/yali_api/admin/locations', authenticateToken, async (req, res) => {
 // PRODUCT REVIEWS ROUTES
 // -------------------------------------------------------------
 
+// Helper: Update product rating based on approved reviews
+const updateProductRating = async (productId) => {
+  try {
+    const [rows] = await pool.query('SELECT AVG(rating) as avg_rating, COUNT(*) as count FROM product_reviews WHERE product_id = ? AND status = "approved"', [productId]);
+    if (rows[0].count > 0) {
+      const avgRating = parseFloat(rows[0].avg_rating).toFixed(1);
+      await pool.query('UPDATE products SET rating = ?, reviews_count = ? WHERE id = ?', [avgRating, rows[0].count, productId]);
+    } else {
+      await pool.query('UPDATE products SET rating = 0, reviews_count = 0 WHERE id = ?', [productId]);
+    }
+  } catch (err) {
+    console.error('Error updating product rating:', err);
+  }
+};
+
 // Get approved reviews for a product
 app.get('/yali_api/products/:id/reviews', async (req, res) => {
   try {
@@ -2434,6 +2512,8 @@ app.post('/yali_api/products/:id/reviews', authenticateToken, async (req, res) =
       [req.params.id, req.user.id, req.user.name, rating, comment || '', media ? JSON.stringify(media) : null]
     );
 
+    await updateProductRating(req.params.id);
+
     res.status(201).json({ message: 'Review submitted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Server error submitting review' });
@@ -2479,7 +2559,13 @@ app.put('/yali_api/admin/reviews/:id/status', authenticateToken, async (req, res
     return res.status(403).json({ error: 'Unauthorized: Admins only' });
   }
   try {
+    const [review] = await pool.query('SELECT product_id FROM product_reviews WHERE id = ?', [req.params.id]);
     await pool.query('UPDATE product_reviews SET status = ? WHERE id = ?', [req.body.status, req.params.id]);
+    
+    if (review.length > 0) {
+      await updateProductRating(review[0].product_id);
+    }
+
     res.json({ message: 'Status updated' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -2493,7 +2579,13 @@ app.delete('/yali_api/admin/reviews/:id', authenticateToken, async (req, res) =>
     return res.status(403).json({ error: 'Unauthorized: Admins only' });
   }
   try {
+    const [review] = await pool.query('SELECT product_id FROM product_reviews WHERE id = ?', [req.params.id]);
     await pool.query('DELETE FROM product_reviews WHERE id = ?', [req.params.id]);
+    
+    if (review.length > 0) {
+      await updateProductRating(review[0].product_id);
+    }
+
     res.json({ message: 'Review deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

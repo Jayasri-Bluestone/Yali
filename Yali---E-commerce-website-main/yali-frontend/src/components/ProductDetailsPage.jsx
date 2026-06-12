@@ -81,6 +81,9 @@ export function ProductDetailsPage({
       setActiveTab('description');
       if (product.variants && product.variants.length > 0) {
         setSelectedVariant(product.variants[0]);
+        if (product.variants[0].image) {
+          setSelectedImage(product.variants[0].image);
+        }
       } else {
         setSelectedVariant(null);
       }
@@ -403,7 +406,12 @@ export function ProductDetailsPage({
                     {product.variants.map((v, idx) => (
                       <button
                         key={idx}
-                        onClick={() => setSelectedVariant(v)}
+                        onClick={() => {
+                          setSelectedVariant(v);
+                          if (v.image) {
+                            setSelectedImage(v.image);
+                          }
+                        }}
                         className={`px-4 py-2 border rounded-xl text-sm font-semibold transition-all ${
                           selectedVariant?.id === v.id
                             ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm'

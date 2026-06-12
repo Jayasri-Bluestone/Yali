@@ -465,7 +465,8 @@ function EmptyState({ cfg, onBackToHome, subCategoryFilter }) {
 export function CategoryPage({
   categoryKey, onBackToHome, products,
   onAddToCart, onProductClick, wishlistItems, onToggleWishlist,
-  videos: backendVideos = []
+  videos: backendVideos = [],
+  subCategories: dbSubCategories = []
 }) {
   const cfg = CATEGORY_CONFIG[categoryKey] || {
     title: 'Category', tagline: 'Explore Products', description: 'Hand-picked items for you.',
@@ -481,6 +482,17 @@ export function CategoryPage({
     .filter(v => v.category === categoryKey)
     .map(v => ({ id: `db-${v.id}`, title: v.title, shortTitle: v.shortTitle || v.title, desc: v.desc || v.description || '', url: v.url, duration: v.duration || '0:15' }));
   const videos = backendCatVideos.length > 0 ? backendCatVideos : (CATEGORY_VIDEOS[categoryKey] || []);
+
+  const dynamicSubCats = dbSubCategories
+    .filter(sc => sc.category_value === categoryKey && sc.status === 'active')
+    .map(sc => ({
+      label: sc.label,
+      emoji: sc.emoji,
+      image: sc.image_url,
+      filter: sc.filter_tag
+    }));
+
+  const activeSubCategories = dynamicSubCats.length > 0 ? dynamicSubCats : (cfg.subCategories || []);
 
   const [expandedId, setExpandedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
@@ -532,7 +544,15 @@ export function CategoryPage({
       ? allProducts
       : allProducts.filter(p => {
           const haystack = `${p.name} ${p.subcategory || ''} ${p.badge || ''} ${p.description || ''}`.toLowerCase();
-          return haystack.includes(activeSubCat.toLowerCase());
+          const tag = activeSubCat.toLowerCase();
+          
+          // Simple plural matching: if tag ends with 's', try checking without 's' as well.
+          let singularTag = tag;
+          if (tag.endsWith('s')) {
+            singularTag = tag.slice(0, -1);
+          }
+          
+          return haystack.includes(tag) || haystack.includes(singularTag);
         });
   }, [allProducts, activeSubCat]);
 
@@ -720,7 +740,7 @@ export function CategoryPage({
       {/* ══════════════════════════════════════════════════════════
           SECTION 4 — SUB-CATEGORY ICON SCROLL GRID (Flipkart style)
       ══════════════════════════════════════════════════════════ */}
-      {cfg.subCategories?.length > 0 && (
+      {activeSubCategories.length > 0 && (
         <section className="mt-10">
           <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
@@ -759,7 +779,7 @@ export function CategoryPage({
                   style={activeSubCat === 'All' ? { color: cfg.accentHex } : { color: '#6b7280' }}>All</span>
               </button>
 
-              {cfg.subCategories.map((item, i) => (
+              {activeSubCategories.map((item, i) => (
                 <div key={i} className="flex-shrink-0">
                   <SubCategoryIcon
                     item={item}
@@ -947,8 +967,8 @@ export function CategoryPage({
 
                       {/* Video Spotlights In-Between */}
                       {videos.length > 0 && (
-                        <div id="cat-videos" className="my-10 bg-slate-950 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-                          <h2 className="text-2xl font-black text-white mb-6">Featured Videos</h2>
+                        <div id="cat-videos" className="my-10 relative overflow-hidden">
+                          <h2 className="text-2xl font-black text-gray-900 mb-6">Featured Videos</h2>
                           <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
                             {videos.map(vid => (
                               <VideoCard 

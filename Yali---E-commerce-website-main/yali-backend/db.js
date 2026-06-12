@@ -59,6 +59,22 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 4.3.1 Create Sub Categories Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS sub_categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        category_value VARCHAR(100) NOT NULL,
+        label VARCHAR(255) NOT NULL,
+        emoji VARCHAR(50),
+        image_url VARCHAR(500),
+        filter_tag VARCHAR(100) NOT NULL,
+        display_order INT DEFAULT 0,
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_value) REFERENCES categories(value) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     // 3. Create Products Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS products (
@@ -130,6 +146,7 @@ async function initDB() {
         attributes_json JSON NOT NULL,
         price DECIMAL(10,2) NOT NULL,
         stock INT DEFAULT 0,
+        image TEXT NULL,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -544,6 +561,19 @@ async function seedData(connection) {
       ('bike-accessories', 'Bike Accessories', 'Bike', 'bg-gradient-to-br from-[#22d3ee] to-[#0066cc]', 'active'),
       ('car-accessories', 'Car Accessories', 'Car', 'bg-gradient-to-br from-[#8b5cf6] to-[#0066cc]', 'active'),
       ('organic-groceries', 'Organic Groceries', 'Leaf', 'bg-gradient-to-br from-[#f59e0b] to-[#10b981]', 'active');
+    `);
+  }
+
+  // Check if sub_categories table is empty
+  const [subCategoryCount] = await connection.query('SELECT COUNT(*) as count FROM sub_categories');
+  if (subCategoryCount[0].count === 0) {
+    console.log('Seeding default sub_categories...');
+    await connection.query(`
+      INSERT INTO sub_categories (category_value, label, emoji, image_url, filter_tag, display_order, status) VALUES
+      ('car-accessories', 'Seat Covers', '💺', 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=200&q=80', 'Seat Covers', 1, 'active'),
+      ('car-accessories', 'Floor Mats', '🟫', 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=200&q=80', 'Floor Mats', 2, 'active'),
+      ('organic-groceries', 'Rice & Grains', '🌾', 'https://images.unsplash.com/photo-1536304993881-ff86e0c9ef64?w=200&q=80', 'Grains', 1, 'active'),
+      ('organic-groceries', 'Spices', '🌶️', 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=200&q=80', 'Spices', 2, 'active');
     `);
   }
 

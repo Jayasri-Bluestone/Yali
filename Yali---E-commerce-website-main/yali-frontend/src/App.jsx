@@ -177,7 +177,7 @@ export function ProductScrollRow({ products, wishlistItems, onAddToCart, onProdu
 // ─────────────────────────────────────────────
 // Category Page Wrapper
 // ─────────────────────────────────────────────
-function CategoryPageWrapper({ products, videos, onAddToCart, wishlistItems, onToggleWishlist }) {
+function CategoryPageWrapper({ products, videos, subCategories, onAddToCart, wishlistItems, onToggleWishlist }) {
   const { categoryId } = useParams();
   const navigate = useNavigate();
   const ResolvedPage = resolveCategoryPage(categoryId);
@@ -780,6 +780,7 @@ export default function App() {
   const [uiCards, setUiCards] = useState([]);
 
   const [categories, setCategories] = useState([]);
+  const [subCategories, setSubCategories] = useState([]);
 
   // Load categories
   const fetchCategories = async () => {
@@ -792,6 +793,20 @@ export default function App() {
       }
     } catch (e) {
       console.error('Failed to load categories', e);
+    }
+  };
+
+  // Load sub-categories
+  const fetchSubCategories = async () => {
+    try {
+      const allQuery = userData?.role === 'admin' ? '?all=true' : '';
+      const res = await fetch(`${API_URL}/sub-categories${allQuery}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSubCategories(data);
+      }
+    } catch (e) {
+      console.error('Failed to load sub-categories', e);
     }
   };
 
@@ -910,6 +925,7 @@ export default function App() {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchSubCategories();
     fetchBanners();
     fetchCoupons();
     fetchVideos();
@@ -1290,6 +1306,7 @@ export default function App() {
                   <CategoryPageWrapper
                     products={activeProducts}
                     videos={activeVideos}
+                    subCategories={subCategories}
                     onAddToCart={handleAddToCart}
                     wishlistItems={wishlistItems}
                     onToggleWishlist={handleToggleWishlist}

@@ -30,6 +30,7 @@ import { useToast } from '../../context/ToastContext';
 import { DashboardTab } from './DashboardTab';
 import { ProductsTab } from './ProductsTab';
 import { CategoriesTab } from './CategoriesTab';
+import { SubCategoriesTab } from './SubCategoriesTab';
 import { OrdersTab } from './OrdersTab';
 import { CustomersTab } from './CustomersTab';
 import { AdminsTab } from './AdminsTab';
@@ -170,6 +171,7 @@ export function AdminDashboard({
     { id: 'dashboard', label: 'Dashboard', icon: TrendingUp, show: true },
     { id: 'products', label: 'Products', icon: ShoppingBag, show: true },
     { id: 'categories', label: 'Categories', icon: Tag, show: userData?.role === 'admin' },
+    { id: 'sub-categories', label: 'Sub-Cats', icon: Tag, show: userData?.role === 'admin' },
     { id: 'orders', label: 'Orders', icon: Package, show: true },
     { id: 'users', label: 'Customers', icon: Users, show: userData?.role === 'admin' },
     { id: 'admins', label: 'Administrators', icon: ShieldCheck, show: isSuperAdmin },
@@ -804,6 +806,16 @@ export function AdminDashboard({
                 />
               } />
             )}
+            
+            {userData?.role === 'admin' && (
+              <Route path="/admin/sub-categories" element={
+                <SubCategoriesTab
+                  categoriesList={categoriesList}
+                  token={token}
+                  handleToggleStatus={handleToggleStatus}
+                />
+              } />
+            )}
 
             <Route path="/admin/orders" element={
               <OrdersTab
@@ -1108,7 +1120,7 @@ export function AdminDashboard({
                     type="button"
                     onClick={() => {
                       const currentVars = Array.isArray(productForm.variants) ? productForm.variants : [];
-                      setProductForm({ ...productForm, variants: [...currentVars, { sku: '', attributes: {}, price: '', stock: '' }] });
+                      setProductForm({ ...productForm, variants: [...currentVars, { sku: '', attributes: {}, price: '', stock: '', image: '' }] });
                     }}
                     className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition-colors cursor-pointer"
                   >
@@ -1116,66 +1128,82 @@ export function AdminDashboard({
                   </button>
                 </div>
                 {Array.isArray(productForm.variants) && productForm.variants.map((variant, idx) => (
-                  <div key={idx} className="flex flex-wrap gap-2 items-center bg-white p-3 rounded-lg border border-indigo-200 shadow-sm relative group">
-                    <div className="w-full sm:w-auto flex-1">
-                      <input
-                        type="text"
-                        placeholder="Variant Attributes (e.g. Size: M, Color: Red)"
-                        value={variant.attributesString !== undefined ? variant.attributesString : Object.entries(variant.attributes || {}).map(([k, v]) => `${k}: ${v}`).join(', ')}
-                        onChange={(e) => {
+                  <div key={idx} className="flex flex-col gap-2 bg-white p-3 rounded-lg border border-indigo-200 shadow-sm relative group">
+                    <div className="flex flex-wrap gap-2 items-start">
+                      <div className="w-full sm:w-auto flex-1">
+                        <input
+                          type="text"
+                          placeholder="Variant Attributes (e.g. Size: M, Color: Red)"
+                          value={variant.attributesString !== undefined ? variant.attributesString : Object.entries(variant.attributes || {}).map(([k, v]) => `${k}: ${v}`).join(', ')}
+                          onChange={(e) => {
+                            const newVars = [...productForm.variants];
+                            newVars[idx].attributesString = e.target.value;
+                            const pairs = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                            const attrs = {};
+                            pairs.forEach(p => {
+                              const [k, v] = p.split(':');
+                              if (k && v) attrs[k.trim()] = v.trim();
+                            });
+                            newVars[idx].attributes = attrs;
+                            setProductForm({ ...productForm, variants: newVars });
+                          }}
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <div className="text-[9px] text-gray-400 mt-0.5">Format: "Key: Value, Key: Value"</div>
+                      </div>
+                      <div className="w-24">
+                        <input
+                          type="number"
+                          placeholder="Price"
+                          value={variant.price}
+                          onChange={(e) => {
+                            const newVars = [...productForm.variants];
+                            newVars[idx].price = e.target.value;
+                            setProductForm({ ...productForm, variants: newVars });
+                          }}
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="w-24">
+                        <input
+                          type="number"
+                          placeholder="Stock"
+                          value={variant.stock}
+                          onChange={(e) => {
+                            const newVars = [...productForm.variants];
+                            newVars[idx].stock = e.target.value;
+                            setProductForm({ ...productForm, variants: newVars });
+                          }}
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
                           const newVars = [...productForm.variants];
-                          newVars[idx].attributesString = e.target.value;
-                          const pairs = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
-                          const attrs = {};
-                          pairs.forEach(p => {
-                            const [k, v] = p.split(':');
-                            if (k && v) attrs[k.trim()] = v.trim();
-                          });
-                          newVars[idx].attributes = attrs;
+                          newVars.splice(idx, 1);
                           setProductForm({ ...productForm, variants: newVars });
                         }}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
-                      <div className="text-[9px] text-gray-400 mt-0.5">Format: "Key: Value, Key: Value"</div>
+                        className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors mt-0.5"
+                        title="Remove variant"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <div className="w-24">
-                      <input
-                        type="number"
-                        placeholder="Price"
-                        value={variant.price}
-                        onChange={(e) => {
+                    <div className="w-full mt-1">
+                      <FileUploadInput
+                        label={`Variant Image (Optional)`}
+                        type="image"
+                        value={variant.image || ''}
+                        onChange={(url) => {
                           const newVars = [...productForm.variants];
-                          newVars[idx].price = e.target.value;
+                          newVars[idx].image = url;
                           setProductForm({ ...productForm, variants: newVars });
                         }}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        accept="image/*"
+                        token={token}
                       />
                     </div>
-                    <div className="w-24">
-                      <input
-                        type="number"
-                        placeholder="Stock"
-                        value={variant.stock}
-                        onChange={(e) => {
-                          const newVars = [...productForm.variants];
-                          newVars[idx].stock = e.target.value;
-                          setProductForm({ ...productForm, variants: newVars });
-                        }}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newVars = [...productForm.variants];
-                        newVars.splice(idx, 1);
-                        setProductForm({ ...productForm, variants: newVars });
-                      }}
-                      className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
-                      title="Remove variant"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 ))}
                 {(!Array.isArray(productForm.variants) || productForm.variants.length === 0) && (

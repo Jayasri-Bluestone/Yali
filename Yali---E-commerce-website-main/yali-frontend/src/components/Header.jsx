@@ -1,6 +1,7 @@
-import { ShoppingCart, Search, User, Menu, Heart, ShieldAlert, Store, LogOut, Package } from 'lucide-react';
-import { useState } from 'react';
+import { ShoppingCart, Search, User, Menu, Heart, ShieldAlert, Store, LogOut, Package, ArrowRight } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
+import { formatINR } from '../utils/currency';
 
 export function Header({
   cartCount,
@@ -17,14 +18,48 @@ export function Header({
   onCategoryClick,
   onLogoutClick,
   searchQuery = '',
-  onSearch
+  onSearch,
+  products = [],
+  categoriesList = []
 }) {
   const [searchParams] = useSearchParams();
   const searchQ = searchParams.get('q') || searchQuery;
   const [localSearch, setLocalSearch] = useState(searchQ);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showPredictions, setShowPredictions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const searchContainerRef = useRef(null);
+
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setShowPredictions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const predictions = useMemo(() => {
+    if (!localSearch.trim()) return { categories: [], products: [] };
+    const q = localSearch.toLowerCase().trim();
+
+    const matchedCats = categoriesList.filter(c => 
+      c.label.toLowerCase().includes(q) || (c.value && c.value.toLowerCase().includes(q))
+    ).slice(0, 2);
+
+    const matchedProds = products.filter(p => {
+      const haystack = `${p.name} ${p.description || ''} ${p.category || ''}`.toLowerCase();
+      let singularQ = q;
+      if (q.endsWith('s')) singularQ = q.slice(0, -1);
+      return haystack.includes(q) || haystack.includes(singularQ);
+    }).slice(0, 5);
+
+    return { categories: matchedCats, products: matchedProds };
+  }, [localSearch, products, categoriesList]);
 
   const handleAccountClick = () => {
     if (onAccountClick) {
@@ -32,9 +67,41 @@ export function Header({
     }
   };
 
-  const handleSearchSubmit = (e) => {
-    if (e.key === 'Enter' && localSearch.trim()) {
-      navigate(`/search?q=${encodeURIComponent(localSearch.trim())}`);
+  const handleKeyDown = (e) => {
+    const totalItems = predictions.categories.length + predictions.products.length;
+
+    if (!showPredictions || totalItems === 0) {
+      if (e.key === 'Enter' && localSearch.trim()) {
+        navigate(`/search?q=${encodeURIComponent(localSearch.trim())}`);
+        setShowPredictions(false);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < totalItems - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > -1 ? prev - 1 : -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex === -1) {
+        if (localSearch.trim()) {
+          navigate(`/search?q=${encodeURIComponent(localSearch.trim())}`);
+          setShowPredictions(false);
+        }
+      } else {
+        const isCat = selectedIndex < predictions.categories.length;
+        if (isCat) {
+          const cat = predictions.categories[selectedIndex];
+          navigate(`/category/${cat.value}`);
+        } else {
+          const prod = predictions.products[selectedIndex - predictions.categories.length];
+          navigate(`/product/${prod.id}`);
+        }
+        setShowPredictions(false);
+      }
     }
   };
 
@@ -147,21 +214,77 @@ export function Header({
           </div>
 
           {/* Search Bar (Full width on mobile, flex-1 on desktop) */}
-          <div className="w-full md:flex-1 md:max-w-2xl order-last md:order-none">
+          <div className="w-full md:flex-1 md:max-w-2xl order-last md:order-none relative" ref={searchContainerRef}>
             <div className="relative">
               <input
                 type="text"
-                placeholder="Search for products..."
+                placeholder="Search for products, categories..."
                 value={localSearch}
+                onFocus={() => setShowPredictions(true)}
                 onChange={(e) => {
                   setLocalSearch(e.target.value);
+                  setSelectedIndex(-1);
+                  setShowPredictions(true);
                   onSearch?.(e.target.value);
                 }}
-                onKeyDown={handleSearchSubmit}
+                onKeyDown={handleKeyDown}
                 className="w-full px-4 py-2 sm:py-2.5 pl-10 sm:pl-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent text-sm sm:text-base"
               />
               <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
             </div>
+
+            {/* Prediction Dropdown */}
+            {showPredictions && localSearch.trim() && (predictions.categories.length > 0 || predictions.products.length > 0) && (
+              <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-50 flex flex-col">
+                {predictions.categories.length > 0 && (
+                  <div className="p-2 border-b border-gray-100">
+                    <div className="text-[10px] font-black uppercase text-gray-400 px-3 mb-1">Categories</div>
+                    {predictions.categories.map((c, idx) => (
+                      <div
+                        key={`cat-${c.value}`}
+                        onClick={() => {
+                          navigate(`/category/${c.value}`);
+                          setShowPredictions(false);
+                        }}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${selectedIndex === idx ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                      >
+                        <Search className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm font-semibold text-gray-800">{c.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {predictions.products.length > 0 && (
+                  <div className="p-2">
+                    <div className="text-[10px] font-black uppercase text-gray-400 px-3 mb-1">Products</div>
+                    {predictions.products.map((p, idx) => {
+                      const absoluteIdx = predictions.categories.length + idx;
+                      return (
+                        <div
+                          key={`prod-${p.id}`}
+                          onClick={() => {
+                            navigate(`/product/${p.id}`);
+                            setShowPredictions(false);
+                          }}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${selectedIndex === absoluteIdx ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                        >
+                          <img 
+                            src={p.image} 
+                            alt={p.name} 
+                            className="w-10 h-10 rounded-md object-cover flex-shrink-0"
+                            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=100&q=80'; }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold text-gray-900 truncate">{p.name}</h4>
+                            <p className="text-xs text-[#0066cc] font-bold">{formatINR(p.price)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
         </div>

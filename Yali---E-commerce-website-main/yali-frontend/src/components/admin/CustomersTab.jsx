@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
 import { API_URL } from '../../config';
-import { ShoppingCart, Heart, XCircle, Eye } from 'lucide-react';
+import { ShoppingCart, Heart, XCircle, Eye, Bookmark } from 'lucide-react';
 import { Pagination } from './Pagination';
 
 export function CustomersTab({
@@ -138,11 +138,11 @@ export function CustomersTab({
                   <div className="bg-purple-100 p-1.5 rounded-lg"><ShoppingCart className="w-4 h-4 text-purple-600" /></div>
                   <h4 className="text-lg font-bold text-gray-800">Shopping Cart</h4>
                 </div>
-                {carts.filter(c => c.user_id === selectedUser.id).length === 0 ? (
+                {carts.filter(c => c.user_id === selectedUser.id && c.status !== 'saved').length === 0 ? (
                   <div className="text-sm text-gray-400 italic bg-gray-50 p-4 rounded-xl text-center border border-gray-100">Cart is empty</div>
                 ) : (
                   <div className="space-y-3">
-                    {carts.filter(c => c.user_id === selectedUser.id).map(item => (
+                    {carts.filter(c => c.user_id === selectedUser.id && c.status !== 'saved').map(item => (
                       <div key={item.id} className="flex items-center gap-4 bg-white border border-gray-200 p-3 rounded-xl shadow-sm">
                         {item.image ? (
                           <img src={item.image} className="w-12 h-12 object-cover rounded-lg border border-gray-100" alt={item.product_name} />
@@ -157,6 +157,33 @@ export function CustomersTab({
                         </div>
                         <div className="text-right font-bold text-gray-900">
                           ₹{(item.price * item.quantity).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Saved Items Section */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="bg-indigo-100 p-1.5 rounded-lg"><Bookmark className="w-4 h-4 text-indigo-600" /></div>
+                  <h4 className="text-lg font-bold text-gray-800">Saved Items</h4>
+                </div>
+                {carts.filter(c => c.user_id === selectedUser.id && c.status === 'saved').length === 0 ? (
+                  <div className="text-sm text-gray-400 italic bg-gray-50 p-4 rounded-xl text-center border border-gray-100">No saved items</div>
+                ) : (
+                  <div className="space-y-3">
+                    {carts.filter(c => c.user_id === selectedUser.id && c.status === 'saved').map(item => (
+                      <div key={item.id} className="flex items-center gap-4 bg-white border border-gray-200 p-3 rounded-xl shadow-sm opacity-80">
+                        {item.image ? (
+                          <img src={item.image} className="w-10 h-10 object-cover rounded-lg border border-gray-100 grayscale" alt={item.product_name} />
+                        ) : (
+                          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200"><Bookmark className="w-4 h-4 text-gray-300"/></div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-gray-900 text-sm truncate">{item.product_name}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">₹{item.price}</div>
                         </div>
                       </div>
                     ))}
