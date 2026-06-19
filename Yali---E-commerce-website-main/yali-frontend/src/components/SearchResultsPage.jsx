@@ -207,26 +207,30 @@ export function SearchResultsPage({
             <div className="space-y-4">
               {displayProducts.map(product => (
                 <div key={product.id} onClick={() => navigate(`/product/${product.id}`)}
-                  className="flex gap-4 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group items-center">
-                  <div className="relative w-28 h-28 bg-gray-50 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100">
-                    <img src={product.image} alt={product.name}
-                      className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform"
-                      onError={e => { e.target.src = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=200&q=80'; }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-gray-900 line-clamp-2 mb-1 text-sm md:text-base">{product.name}</h3>
-                    {product.category && (
-                      <span className="text-xs font-semibold text-gray-500 mb-2 block capitalize">{product.category.replace('-', ' ')}</span>
-                    )}
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-black text-gray-900">{formatINR(product.price)}</span>
-                      {product.originalPrice && <span className="text-sm text-gray-400 line-through">{formatINR(product.originalPrice)}</span>}
-                      {product.discount && <span className="text-xs text-green-600 font-bold ml-1">{product.discount}% off</span>}
+                  className="flex flex-col sm:flex-row gap-3 sm:gap-4 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group sm:items-center">
+                  
+                  <div className="flex gap-3 sm:gap-4 flex-1 w-full">
+                    <div className="relative w-24 h-24 sm:w-28 sm:h-28 bg-gray-50 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100">
+                      <img src={product.image} alt={product.name}
+                        className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform"
+                        onError={e => { e.target.src = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=200&q=80'; }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-gray-900 line-clamp-2 mb-1 text-sm md:text-base">{product.name}</h3>
+                      {product.category && (
+                        <span className="text-xs font-semibold text-gray-500 mb-2 block capitalize">{product.category.replace('-', ' ')}</span>
+                      )}
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-lg sm:text-xl font-black text-gray-900">{formatINR(product.price)}</span>
+                        {product.originalPrice && <span className="text-xs sm:text-sm text-gray-400 line-through">{formatINR(product.originalPrice)}</span>}
+                        {product.discount && <span className="text-xs text-green-600 font-bold">{product.discount}% off</span>}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 flex-shrink-0">
+
+                  <div className="w-full sm:w-auto flex-shrink-0 mt-1 sm:mt-0">
                     <button onClick={e => { e.stopPropagation(); onAddToCart(product); }}
-                      className="bg-[#0066cc] hover:bg-[#0052a3] text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all cursor-pointer text-center">
+                      className="w-full sm:w-auto bg-[#0066cc] hover:bg-[#0052a3] text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all cursor-pointer text-center">
                       Add to Cart
                     </button>
                   </div>

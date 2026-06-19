@@ -50,7 +50,7 @@ async function sendOrderConfirmation(customerEmail, order) {
     <tr>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.name}</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${(item.price * item.quantity).toFixed(2)}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">₹${(item.price * item.quantity).toFixed(2)}</td>
     </tr>
   `).join('');
 
@@ -81,11 +81,11 @@ async function sendOrderConfirmation(customerEmail, order) {
       </table>
 
       <div style="margin-top: 20px; text-align: right; line-height: 1.6;">
-        <p style="margin: 2px 0;">Subtotal: $${order.subtotal.toFixed(2)}</p>
-        ${order.discount > 0 ? `<p style="margin: 2px 0; color: #10b981;">Discount: -$${order.discount.toFixed(2)}</p>` : ''}
-        <p style="margin: 2px 0;">Tax (10%): $${order.tax.toFixed(2)}</p>
-        <p style="margin: 2px 0;">Shipping: ${order.shipping === 0 ? 'FREE' : `$${order.shipping.toFixed(2)}`}</p>
-        <h3 style="margin: 5px 0; color: #0066cc;">Total: $${order.total.toFixed(2)}</h3>
+        <p style="margin: 2px 0;">Subtotal: ₹${order.subtotal.toFixed(2)}</p>
+        ${order.discount > 0 ? `<p style="margin: 2px 0; color: #10b981;">Discount: -₹${order.discount.toFixed(2)}</p>` : ''}
+        <p style="margin: 2px 0;">Tax (10%): ₹${order.tax.toFixed(2)}</p>
+        <p style="margin: 2px 0;">Shipping: ${order.shipping === 0 ? 'FREE' : `₹${order.shipping.toFixed(2)}`}</p>
+        <h3 style="margin: 5px 0; color: #0066cc;">Total: ₹${order.total.toFixed(2)}</h3>
       </div>
 
       <p style="margin-top: 30px; text-align: center; color: #777; font-size: 12px;">This is an automated receipt from YALI. Thank you for your business!</p>
@@ -245,8 +245,40 @@ async function sendStatusUpdateNotification(customerEmail, order) {
   }
 }
 
+// 4. Notify Admin of Low Wallet Balance
+async function sendAdminLowBalanceWarning(currentBalance, threshold) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+      <h2 style="background-color: #ef4444; color: white; padding: 15px; text-align: center; border-radius: 6px; margin-top: 0;">Admin Wallet Low Balance Alert</h2>
+      <p>Hello <strong>Admin</strong>,</p>
+      <p>This is an automated system alert regarding the Admin Wallet used for processing refunds.</p>
+      
+      <div style="border-left: 4px solid #ef4444; padding-left: 15px; margin: 20px 0; font-size: 16px;">
+        <p style="margin: 5px 0;"><strong>Current Balance:</strong> ₹${parseFloat(currentBalance).toFixed(2)}</p>
+        <p style="margin: 5px 0;"><strong>Configured Threshold:</strong> ₹${parseFloat(threshold).toFixed(2)}</p>
+      </div>
+
+      <p>Please log in to the YALI Admin Dashboard to top up the wallet balance to ensure uninterrupted refund processing.</p>
+    </div>
+  `;
+
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@yali.com';
+    await transporter.sendMail({
+      from: `"YALI System" <${process.env.SMTP_USER || 'system@yali.com'}>`,
+      to: adminEmail,
+      subject: `URGENT: Admin Wallet Balance Below Threshold`,
+      html
+    });
+    console.log(`Low balance warning email sent to ${adminEmail}`);
+  } catch (error) {
+    console.error(`Failed to send low balance warning email:`, error.message);
+  }
+}
+
 module.exports = {
   sendOrderConfirmation,
   sendVendorNotification,
-  sendStatusUpdateNotification
+  sendStatusUpdateNotification,
+  sendAdminLowBalanceWarning
 };

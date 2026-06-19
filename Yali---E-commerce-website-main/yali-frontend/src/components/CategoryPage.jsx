@@ -630,7 +630,7 @@ export function CategoryPage({
         <div className="absolute inset-0 opacity-[0.03]"
           style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.5) 1px,transparent 1px)', backgroundSize: '60px 60px' }} />
 
-        <div className="relative max-w-7xl mx-auto px-4 pt-8 pb-12">
+        <div className="relative max-w-7xl mx-auto px-6 sm:px-8 md:px-10 pt-8 pb-12">
           <button onClick={onBackToHome}
             className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white rounded-xl font-bold text-sm mb-10 transition-all cursor-pointer group">
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back to Home

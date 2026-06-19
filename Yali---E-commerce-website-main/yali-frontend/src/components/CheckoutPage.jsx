@@ -1,4 +1,4 @@
-import { X, CreditCard, Wallet, Building2, Smartphone, ChevronRight, Lock, Tag, ArrowLeft } from 'lucide-react';
+import { X, CreditCard, Wallet, Building2, Smartphone, ChevronRight, Lock, Tag, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
@@ -17,6 +17,8 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
   const [selectedAddressId, setSelectedAddressId] = useState(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [saveAddressToAccount, setSaveAddressToAccount] = useState(true);
+  const [showCvv, setShowCvv] = useState(false);
+  const [activeGateway, setActiveGateway] = useState(null);
   
 
   useEffect(() => {
@@ -43,6 +45,17 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
         }
       })
       .catch(console.error);
+      
+      // Fetch active payment gateway
+      fetch(`${API_URL}/settings/payment-gateways/active`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && !data.error) {
+            setActiveGateway(data);
+          }
+        })
+        .catch(console.error);
+
     } else {
       setIsAddingNew(true);
     }
@@ -127,7 +140,7 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
         },
         body: JSON.stringify({
           address: fullAddress,
-          paymentMethod: paymentMethod === 'card' ? 'CARD' : paymentMethod.toUpperCase(),
+          paymentMethod: paymentMethod === 'online' ? activeGateway?.display_name?.toUpperCase() || 'ONLINE' : paymentMethod === 'card' ? 'CARD' : paymentMethod.toUpperCase(),
           items: items.map(it => {
             let vDesc = null;
             let vId = null;
@@ -255,7 +268,7 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                   customerName: shippingAddress.name || user?.name || 'Customer',
                   customerEmail: user?.email || 'customer@example.com',
                   address: `${shippingAddress.address}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}`,
-                  paymentMethod: paymentMethod === 'card' ? 'Card Payment' : paymentMethod.toUpperCase(),
+                  paymentMethod: paymentMethod === 'online' ? activeGateway?.display_name || 'Online Payment' : paymentMethod === 'card' ? 'Card Payment' : paymentMethod.toUpperCase(),
                   items: items,
                   subtotal: subtotal,
                   tax: tax,
@@ -522,142 +535,265 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
               {step === 'payment' && (
                 <div className="space-y-4">
                   {/* Payment Method Selection */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-6">
-                    <h3 className="text-xl font-bold mb-4">Payment Method</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <button
-                        onClick={() => setPaymentMethod('card')}
-                        className={`p-4 border-2 rounded-xl transition-all ${
-                          paymentMethod === 'card' ? 'border-[#0066cc] bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <CreditCard className="w-6 h-6 mx-auto mb-2 text-[#0066cc]" />
-                        <div className="text-sm font-medium">Card</div>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('upi')}
-                        className={`p-4 border-2 rounded-xl transition-all ${
-                          paymentMethod === 'upi' ? 'border-[#0066cc] bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <Smartphone className="w-6 h-6 mx-auto mb-2 text-[#10b981]" />
-                        <div className="text-sm font-medium">UPI</div>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('netbanking')}
-                        className={`p-4 border-2 rounded-xl transition-all ${
-                          paymentMethod === 'netbanking' ? 'border-[#0066cc] bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <Building2 className="w-6 h-6 mx-auto mb-2 text-[#8b5cf6]" />
-                        <div className="text-sm font-medium">Net Banking</div>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('wallet')}
-                        className={`p-4 border-2 rounded-xl transition-all ${
-                          paymentMethod === 'wallet' ? 'border-[#0066cc] bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <Wallet className="w-6 h-6 mx-auto mb-2 text-[#f59e0b]" />
-                        <div className="text-sm font-medium">Wallet</div>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('cod')}
-                        className={`p-4 border-2 rounded-xl transition-all ${
-                          paymentMethod === 'cod' ? 'border-[#0066cc] bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="text-2xl mb-1">💵</div>
-                        <div className="text-sm font-medium">COD</div>
-                      </button>
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="p-4 bg-gray-50 border-b border-gray-200">
+                      <h3 className="text-lg font-bold">Payment Method</h3>
+                    </div>
+                    
+                    <div className="divide-y divide-gray-200">
+                      {/* Active Gateway Online Payment (Dynamic) */}
+                      {activeGateway && (
+                        <div className={`transition-colors ${paymentMethod === 'online' ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                          <label className="flex items-start gap-3 p-4 cursor-pointer">
+                            <input 
+                              type="radio" 
+                              name="payment" 
+                              checked={paymentMethod === 'online'} 
+                              onChange={() => setPaymentMethod('online')}
+                              className="mt-1 w-4 h-4 text-[#0066cc] border-gray-300 focus:ring-[#0066cc]"
+                            />
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-900 flex items-center gap-2">
+                                <CreditCard className="w-5 h-5 text-[#0066cc]" />
+                                Pay via {activeGateway.display_name}
+                              </div>
+                              {paymentMethod === 'online' && (
+                                <div className="mt-4 bg-white border border-blue-100 rounded-xl p-6 text-center shadow-sm">
+                                  <Lock className="w-10 h-10 text-green-600 mx-auto mb-3" />
+                                  <h4 className="font-bold text-gray-900 mb-2">Secure Online Payment</h4>
+                                  <p className="text-sm text-gray-600 mb-4">
+                                    You will be redirected to the secure {activeGateway.display_name} portal to complete your transaction.
+                                  </p>
+                                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 inline-block text-left max-w-full overflow-hidden">
+                                    <p className="text-xs font-semibold text-gray-500 mb-1">Gateway Config (Debug):</p>
+                                    <p className="text-xs text-gray-400 font-mono truncate">ID: {activeGateway.name}</p>
+                                    {activeGateway.config && Object.keys(activeGateway.config).map(key => (
+                                      <p key={key} className="text-xs text-gray-400 font-mono truncate">{key}: {activeGateway.config[key]}</p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        </div>
+                      )}
+
+                      {/* UPI Option */}
+                      <div className={`transition-colors ${paymentMethod === 'upi' ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                        <label className="flex items-start gap-3 p-4 cursor-pointer">
+                          <input 
+                            type="radio" 
+                            name="payment" 
+                            checked={paymentMethod === 'upi'} 
+                            onChange={() => setPaymentMethod('upi')}
+                            className="mt-1 w-4 h-4 text-[#0066cc] border-gray-300 focus:ring-[#0066cc]"
+                          />
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900 flex items-center gap-2">
+                              <Smartphone className="w-5 h-5 text-[#10b981]" />
+                              UPI (GPay, PhonePe, Paytm)
+                            </div>
+                            {paymentMethod === 'upi' && (
+                              <div className="mt-4 bg-white border border-blue-100 rounded-xl p-5 shadow-sm space-y-4">
+                                <div className="flex gap-3">
+                                  <button type="button" className="flex-1 py-3 px-2 border border-gray-200 rounded-lg hover:border-[#0066cc] hover:bg-blue-50 transition-colors flex flex-col items-center gap-1">
+                                    <span className="text-xl">💳</span>
+                                    <span className="text-xs font-medium text-gray-700">GPay</span>
+                                  </button>
+                                  <button type="button" className="flex-1 py-3 px-2 border border-gray-200 rounded-lg hover:border-[#0066cc] hover:bg-blue-50 transition-colors flex flex-col items-center gap-1">
+                                    <span className="text-xl">📱</span>
+                                    <span className="text-xs font-medium text-gray-700">PhonePe</span>
+                                  </button>
+                                  <button type="button" className="flex-1 py-3 px-2 border border-gray-200 rounded-lg hover:border-[#0066cc] hover:bg-blue-50 transition-colors flex flex-col items-center gap-1">
+                                    <span className="text-xl">👛</span>
+                                    <span className="text-xs font-medium text-gray-700">Paytm</span>
+                                  </button>
+                                </div>
+                                
+                                <div className="relative">
+                                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+                                  <div className="relative flex justify-center"><span className="bg-white px-2 text-xs text-gray-500">OR</span></div>
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Enter UPI ID</label>
+                                  <input
+                                    type="text"
+                                    value={upiId}
+                                    onChange={(e) => setUpiId(e.target.value)}
+                                    className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                                    placeholder="yourname@upi"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Card Option Fallback */}
+                      {!activeGateway && (
+                        <div className={`transition-colors ${paymentMethod === 'card' ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                          <label className="flex items-start gap-3 p-4 cursor-pointer">
+                            <input 
+                              type="radio" 
+                              name="payment" 
+                              checked={paymentMethod === 'card'} 
+                              onChange={() => setPaymentMethod('card')}
+                              className="mt-1 w-4 h-4 text-[#0066cc] border-gray-300 focus:ring-[#0066cc]"
+                            />
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-900 flex items-center gap-2">
+                                <CreditCard className="w-5 h-5 text-[#0066cc]" />
+                                Credit / Debit / ATM Card
+                              </div>
+                              {paymentMethod === 'card' && (
+                                <div className="mt-4 bg-white border border-blue-100 rounded-xl p-5 shadow-sm space-y-4">
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Card Number</label>
+                                    <input
+                                      type="text"
+                                      value={cardDetails.number}
+                                      onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })}
+                                      className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                                      placeholder="1234 5678 9012 3456"
+                                      maxLength={19}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Cardholder Name</label>
+                                    <input
+                                      type="text"
+                                      value={cardDetails.name}
+                                      onChange={(e) => setCardDetails({ ...cardDetails, name: e.target.value })}
+                                      className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                                      placeholder="John Doe"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">Expiry Date</label>
+                                      <input
+                                        type="text"
+                                        value={cardDetails.expiry}
+                                        onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
+                                        className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                                        placeholder="MM/YY"
+                                        maxLength={5}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">CVV</label>
+                                      <div className="relative">
+                                        <input
+                                          type={showCvv ? "text" : "password"}
+                                          value={cardDetails.cvv}
+                                          onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })}
+                                          className="w-full px-4 py-2 pr-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                                          placeholder="123"
+                                          maxLength={3}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowCvv(!showCvv)}
+                                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                        >
+                                          {showCvv ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Net Banking */}
+                      <div className={`transition-colors ${paymentMethod === 'netbanking' ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                        <label className="flex items-start gap-3 p-4 cursor-pointer">
+                          <input 
+                            type="radio" 
+                            name="payment" 
+                            checked={paymentMethod === 'netbanking'} 
+                            onChange={() => setPaymentMethod('netbanking')}
+                            className="mt-1 w-4 h-4 text-[#0066cc] border-gray-300 focus:ring-[#0066cc]"
+                          />
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900 flex items-center gap-2">
+                              <Building2 className="w-5 h-5 text-[#8b5cf6]" />
+                              Net Banking
+                            </div>
+                            {paymentMethod === 'netbanking' && (
+                              <div className="mt-4 bg-white border border-blue-100 rounded-xl p-5 shadow-sm">
+                                <select className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc] bg-white">
+                                  <option value="">Select your bank</option>
+                                  <option value="sbi">State Bank of India</option>
+                                  <option value="hdfc">HDFC Bank</option>
+                                  <option value="icici">ICICI Bank</option>
+                                  <option value="axis">Axis Bank</option>
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Wallet */}
+                      <div className={`transition-colors ${paymentMethod === 'wallet' ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                        <label className="flex items-start gap-3 p-4 cursor-pointer">
+                          <input 
+                            type="radio" 
+                            name="payment" 
+                            checked={paymentMethod === 'wallet'} 
+                            onChange={() => setPaymentMethod('wallet')}
+                            className="mt-1 w-4 h-4 text-[#0066cc] border-gray-300 focus:ring-[#0066cc]"
+                          />
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900 flex items-center gap-2">
+                              <Wallet className="w-5 h-5 text-[#f59e0b]" />
+                              Wallets
+                            </div>
+                            {paymentMethod === 'wallet' && (
+                              <div className="mt-4 bg-white border border-blue-100 rounded-xl p-5 shadow-sm">
+                                <p className="text-sm text-gray-600 mb-3">Select your wallet to link and pay:</p>
+                                <div className="flex gap-3">
+                                  <button type="button" className="flex-1 py-2 px-2 border border-gray-200 rounded-lg hover:border-[#0066cc] hover:bg-blue-50 transition-colors text-xs font-medium">Amazon Pay</button>
+                                  <button type="button" className="flex-1 py-2 px-2 border border-gray-200 rounded-lg hover:border-[#0066cc] hover:bg-blue-50 transition-colors text-xs font-medium">Mobikwik</button>
+                                  <button type="button" className="flex-1 py-2 px-2 border border-gray-200 rounded-lg hover:border-[#0066cc] hover:bg-blue-50 transition-colors text-xs font-medium">Freecharge</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* COD */}
+                      <div className={`transition-colors ${paymentMethod === 'cod' ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                        <label className="flex items-start gap-3 p-4 cursor-pointer">
+                          <input 
+                            type="radio" 
+                            name="payment" 
+                            checked={paymentMethod === 'cod'} 
+                            onChange={() => setPaymentMethod('cod')}
+                            className="mt-1 w-4 h-4 text-[#0066cc] border-gray-300 focus:ring-[#0066cc]"
+                          />
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900 flex items-center gap-2">
+                              <div className="text-lg leading-none w-5 text-center">💵</div>
+                              Cash on Delivery
+                            </div>
+                            {paymentMethod === 'cod' && (
+                              <div className="mt-4 bg-white border border-blue-100 rounded-xl p-4 shadow-sm">
+                                <p className="text-sm text-gray-600">Pay by cash or UPI when you receive your order. Additional handling charges may apply.</p>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
                     </div>
                   </div>
-
-                  {/* Payment Details */}
-                  {paymentMethod === 'card' && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-6">
-                      <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                        <Lock className="w-5 h-5 text-green-600" />
-                        Card Details
-                      </h3>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
-                          <input
-                            type="text"
-                            value={cardDetails.number}
-                            onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                            placeholder="1234 5678 9012 3456"
-                            maxLength={19}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Cardholder Name</label>
-                          <input
-                            type="text"
-                            value={cardDetails.name}
-                            onChange={(e) => setCardDetails({ ...cardDetails, name: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                            placeholder="John Doe"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
-                            <input
-                              type="text"
-                              value={cardDetails.expiry}
-                              onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                              placeholder="MM/YY"
-                              maxLength={5}
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">CVV</label>
-                            <input
-                              type="password"
-                              value={cardDetails.cvv}
-                              onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                              placeholder="123"
-                              maxLength={3}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {paymentMethod === 'upi' && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-6">
-                      <h3 className="text-lg font-bold mb-4">UPI Payment</h3>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">UPI ID</label>
-                        <input
-                          type="text"
-                          value={upiId}
-                          onChange={(e) => setUpiId(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
-                          placeholder="yourname@upi"
-                        />
-                      </div>
-                      <div className="mt-4 p-4 bg-gray-50 rounded-lg text-center">
-                        <p className="text-sm text-gray-600 mb-2">Or scan QR code</p>
-                        <div className="w-32 h-32 bg-white border-2 border-gray-300 rounded-lg mx-auto flex items-center justify-center">
-                          <span className="text-gray-400">QR Code</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {paymentMethod === 'cod' && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-6">
-                      <h3 className="text-lg font-bold mb-2">Cash on Delivery</h3>
-                      <p className="text-gray-600">Pay when you receive your order. Additional charges may apply.</p>
-                    </div>
-                  )}
                 </div>
               )}
 

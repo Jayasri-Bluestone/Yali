@@ -113,7 +113,7 @@ export function Header({
           <div>Free shipping on orders over $50</div>
           <div className="flex gap-4 items-center">
             <span className="text-xs text-cyan-100 hidden md:inline">Role: <span className="font-bold text-white capitalize">{userRole || 'Guest'}</span></span>
-            <button className="hover:underline">Customer Service</button>
+            <button className="hover:underline hidden sm:block">Customer Service</button>
             <button className="hover:underline hidden sm:block">Track Order</button>
             <button className="hover:underline hidden sm:block">Help</button>
           </div>

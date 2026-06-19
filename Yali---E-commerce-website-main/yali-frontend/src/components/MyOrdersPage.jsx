@@ -12,7 +12,7 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
   const { showToast } = useToast();
   const [loadingOrderId, setLoadingOrderId] = useState(null);
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState(null);
-  const [actionModal, setActionModal] = useState({ isOpen: false, type: '', orderId: '', reason: '' });
+  const [actionModal, setActionModal] = useState({ isOpen: false, type: '', orderId: '', itemId: null, reason: '' });
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
 
   const handleSubmitAction = async () => {
@@ -23,21 +23,36 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
     
     setIsSubmittingAction(true);
     try {
-      const endpoint = actionModal.type === 'cancel' ? 'cancel' : 'return';
-      const res = await fetch(`${API_URL}/orders/${actionModal.orderId}/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ reason: actionModal.reason })
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Failed to ${actionModal.type} order`);
-      
-      showToast(data.message || `Order ${actionModal.type === 'cancel' ? 'cancelled' : 'return requested'} successfully`, 'success');
-      setActionModal({ isOpen: false, type: '', orderId: '', reason: '' });
+      if (actionModal.type === 'returnItem') {
+        const res = await fetch(`${API_URL}/returns/request`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ order_id: actionModal.orderId, item_id: actionModal.itemId, reason: actionModal.reason })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to request return');
+        showToast(data.message || 'Return requested successfully', 'success');
+      } else {
+        const endpoint = actionModal.type === 'cancel' ? 'cancel' : 'return';
+        const res = await fetch(`${API_URL}/orders/${actionModal.orderId}/${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ reason: actionModal.reason })
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Failed to ${actionModal.type} order`);
+        
+        showToast(data.message || `Order ${actionModal.type === 'cancel' ? 'cancelled' : 'return requested'} successfully`, 'success');
+      }
+
+      setActionModal({ isOpen: false, type: '', orderId: '', itemId: null, reason: '' });
       if (refreshOrders) refreshOrders();
       if (refreshUserData) refreshUserData();
     } catch (err) {
@@ -67,32 +82,21 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
     }
   };
 
-  const renderProgressTracker = (order) => {
-    const { status, tracking_number: trackingNumber, tracking_link: trackingLink, delivery_partner: deliveryPartner, status_history, order_date } = order;
-    if (['Cancelled', 'Returned'].includes(status)) return null;
+  const renderProgressTracker = (item, orderDate) => {
+    const { item_status: status, tracking_number: trackingNumber, tracking_link: trackingLink, delivery_partner: deliveryPartner } = item;
+    if (['Cancelled', 'Returned', 'Return Requested', 'Return Approved'].includes(status)) return null;
     
     const steps = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
     const currentIndex = steps.indexOf(status);
 
-    let historyObj = [];
-    try {
-      historyObj = typeof status_history === 'string' ? JSON.parse(status_history) : (status_history || []);
-    } catch(e) {}
-
+    // We don't have item-level status_history yet, so we will just show the order_date for Pending
     const stepDates = {};
-    historyObj.forEach(h => {
-      if (h.status && h.date) {
-        stepDates[h.status] = new Date(h.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-      }
-    });
-    
-    // Fallback for Pending if missing
-    if (!stepDates['Pending'] && order_date) {
-      stepDates['Pending'] = new Date(order_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    if (orderDate) {
+      stepDates['Pending'] = new Date(orderDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
     }
     
     return (
-      <div className="bg-white border-t border-gray-200">
+      <div className="bg-white border-t border-gray-100 pb-4">
         <div className="relative max-w-4xl mx-auto px-6 py-6 sm:py-8">
           
           {/* DESKTOP (Horizontal) */}
@@ -103,18 +107,18 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
                 <div key={step} className="flex-1 flex flex-col items-center relative">
                   {/* Connecting Line to next item */}
                   {idx < steps.length - 1 && (
-                    <div className={`absolute top-5 left-1/2 w-full h-[3px] ${idx < currentIndex ? 'bg-[#008c00]' : 'bg-gray-200'} z-0`}></div>
+                    <div className={`absolute top-4 left-1/2 w-full h-[2px] ${idx < currentIndex ? 'bg-[#008c00]' : 'bg-gray-200'} z-0`}></div>
                   )}
                   
                   {/* Circle */}
-                  <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${isCompleted ? 'bg-[#008c00] text-white shadow-md ring-4 ring-green-50' : 'bg-gray-200 text-gray-400 border-2 border-white'}`}>
-                    {isCompleted ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> : <span className="w-3 h-3 rounded-full bg-white"></span>}
+                  <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${isCompleted ? 'bg-[#008c00] text-white shadow-sm ring-2 ring-green-50' : 'bg-gray-200 text-gray-400 border-2 border-white'}`}>
+                    {isCompleted ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> : <span className="w-2 h-2 rounded-full bg-white"></span>}
                   </div>
                   
                   {/* Text */}
-                  <div className={`mt-4 text-center px-1 ${isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>
-                    <div className={`text-xs lg:text-sm ${isCompleted ? 'font-black' : 'font-semibold'}`}>{step}</div>
-                    <div className="text-[10px] lg:text-xs mt-1 text-gray-500 font-medium">{stepDates[step] || ''}</div>
+                  <div className={`mt-3 text-center px-1 ${isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>
+                    <div className={`text-[10px] lg:text-xs ${isCompleted ? 'font-black' : 'font-semibold'}`}>{step}</div>
+                    <div className="text-[9px] lg:text-[10px] mt-1 text-gray-500 font-medium">{stepDates[step] || ''}</div>
                   </div>
                 </div>
               );
@@ -127,50 +131,27 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
               const isCompleted = idx <= currentIndex;
               const isLast = idx === steps.length - 1;
               return (
-                <div key={step} className="flex items-start relative pb-8">
+                <div key={step} className="flex items-start relative pb-6">
                   {/* Connecting Line to next item */}
                   {!isLast && (
-                    <div className={`absolute top-8 bottom-0 left-4 w-[3px] -translate-x-1/2 ${idx < currentIndex ? 'bg-[#008c00]' : 'bg-gray-200'} z-0`}></div>
+                    <div className={`absolute top-6 bottom-0 left-3 w-[2px] -translate-x-1/2 ${idx < currentIndex ? 'bg-[#008c00]' : 'bg-gray-200'} z-0`}></div>
                   )}
                   
                   {/* Circle */}
-                  <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${isCompleted ? 'bg-[#008c00] text-white shadow-md ring-4 ring-green-50' : 'bg-gray-200 text-gray-400 border-2 border-white'}`}>
-                    {isCompleted ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> : <span className="w-2.5 h-2.5 rounded-full bg-white"></span>}
+                  <div className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${isCompleted ? 'bg-[#008c00] text-white shadow-sm ring-2 ring-green-50' : 'bg-gray-200 text-gray-400 border-2 border-white'}`}>
+                    {isCompleted ? <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> : <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
                   </div>
                   
                   {/* Text */}
-                  <div className={`ml-4 mt-1 ${isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>
-                    <div className={`text-sm ${isCompleted ? 'font-black' : 'font-semibold'}`}>{step}</div>
-                    <div className="text-[11px] mt-0.5 text-gray-500 font-medium">{stepDates[step] || ''}</div>
+                  <div className={`ml-3 mt-0.5 ${isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>
+                    <div className={`text-xs ${isCompleted ? 'font-black' : 'font-semibold'}`}>{step}</div>
+                    <div className="text-[10px] mt-0.5 text-gray-500 font-medium">{stepDates[step] || ''}</div>
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
-        
-        {trackingLink && (
-          <div className="px-6 pb-6 border-t border-gray-100 flex items-center justify-between">
-            <div className="text-sm font-bold text-gray-700 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 mt-4">
-              <div>
-                <span className="text-gray-500 font-medium">Shipped via:</span> {deliveryPartner || 'Courier'}
-              </div>
-              {trackingNumber && (
-                <div>
-                  <span className="text-gray-500 font-medium">AWB:</span> {trackingNumber}
-                </div>
-              )}
-            </div>
-            <a 
-              href={trackingLink} 
-              target="_blank" 
-              rel="noreferrer"
-              className="mt-4 px-4 py-2 bg-blue-50 text-[#0066cc] hover:bg-blue-100 hover:text-[#0052a3] font-bold rounded-xl transition-colors text-sm flex items-center gap-2 border border-blue-200"
-            >
-              Track Package <Package className="w-4 h-4" />
-            </a>
-          </div>
-        )}
       </div>
     );
   };
@@ -248,7 +229,8 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
                 {/* Order Items */}
                 <div className="p-6 divide-y divide-gray-100">
                   {order.items?.map((item, idx) => (
-                    <div key={idx} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
+                    <React.Fragment key={idx}>
+                    <div className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
                       <div 
                         className="w-24 h-24 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0 cursor-pointer group"
                         onClick={() => navigate(`/product/${item.product_id}`)}
@@ -291,24 +273,39 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
                           <span className="font-semibold bg-gray-100 px-2 py-1 rounded-md">Qty: {item.quantity}</span>
                           <span className="font-bold text-gray-900">₹{parseFloat(item.price).toFixed(2)}</span>
                         </div>
-                        
-                        {/* Optional action per item could go here if supported, but currently status is order-level */}
+                        {item.tracking_number && (
+                          <div className="text-sm mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg inline-block">
+                            <span className="font-semibold text-blue-800">Tracking (AWB):</span> <span className="font-mono text-blue-900">{item.tracking_number}</span>
+                          </div>
+                        )}
                       </div>
                       
-                      <div className="sm:self-stretch flex items-center justify-end">
+                      <div className="sm:self-stretch flex flex-col items-end justify-center gap-2">
                         <button 
                           onClick={() => navigate(`/product/${item.product_id}`)}
                           className="text-sm font-bold text-[#0066cc] hover:text-[#0052a3] flex items-center gap-1 bg-blue-50 px-3 py-2 rounded-lg transition-colors"
                         >
                           View Product <ChevronRight className="w-4 h-4" />
                         </button>
+                        {item.item_status === 'Delivered' && (
+                          <button 
+                            onClick={() => setActionModal({ isOpen: true, type: 'returnItem', orderId: order.order_id, itemId: item.item_id || item.id, reason: '' })}
+                            className="text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg transition-colors flex items-center gap-1"
+                          >
+                            <RefreshCcw className="w-3 h-3" /> Return Item
+                          </button>
+                        )}
+                        {['Return Requested', 'Return Approved', 'Returned'].includes(item.item_status) && (
+                          <span className="text-xs font-bold text-orange-700 bg-orange-100 px-3 py-1.5 rounded-lg border border-orange-200">
+                            {item.item_status}
+                          </span>
+                        )}
                       </div>
                     </div>
+                    {renderProgressTracker(item, order.order_date)}
+                  </React.Fragment>
                   ))}
                 </div>
-
-                {/* Status Progress Tracker */}
-                {renderProgressTracker(order)}
 
                 {/* Order Footer Actions */}
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between gap-4 flex-wrap">
@@ -340,13 +337,6 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
                         >
                           <FileText className="w-4 h-4" />
                           Download Invoice
-                        </button>
-                        <button
-                          onClick={() => setActionModal({ isOpen: true, type: 'return', orderId: order.order_id, reason: '' })}
-                          className="px-4 py-2 bg-gray-800 text-white hover:bg-gray-900 font-bold rounded-xl transition-colors text-sm flex items-center gap-2"
-                        >
-                          <RefreshCcw className="w-4 h-4" />
-                          Return Order
                         </button>
                       </>
                     )}
@@ -390,12 +380,12 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in">
             <div className={`p-6 border-b text-white flex items-center gap-3 ${actionModal.type === 'cancel' ? 'bg-red-600' : 'bg-gray-900'}`}>
               {actionModal.type === 'cancel' ? <XCircle className="w-6 h-6" /> : <RefreshCcw className="w-6 h-6" />}
-              <h3 className="text-xl font-bold">{actionModal.type === 'cancel' ? 'Cancel Order' : 'Return Order'}</h3>
+              <h3 className="text-xl font-bold">{actionModal.type === 'cancel' ? 'Cancel Order' : 'Return Item'}</h3>
             </div>
             
             <div className="p-6">
               <p className="text-sm text-gray-600 mb-4">
-                Please provide a reason for {actionModal.type === 'cancel' ? 'cancelling' : 'returning'} order <span className="font-bold text-gray-900">{actionModal.orderId}</span>.
+                Please provide a reason for {actionModal.type === 'cancel' ? 'cancelling order' : 'returning item'} <span className="font-bold text-gray-900">{actionModal.orderId}</span>.
                 {actionModal.type === 'cancel' 
                   ? ' If you have already paid, the amount will be refunded directly to your Yali Wallet.' 
                   : ' Once approved, the product price will be refunded to your Yali Wallet.'}
@@ -411,7 +401,7 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
               
               <div className="flex items-center gap-3 justify-end">
                 <button
-                  onClick={() => setActionModal({ isOpen: false, type: '', orderId: '', reason: '' })}
+                  onClick={() => setActionModal({ isOpen: false, type: '', orderId: '', itemId: null, reason: '' })}
                   disabled={isSubmittingAction}
                   className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >

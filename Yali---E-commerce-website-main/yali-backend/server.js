@@ -10,7 +10,22 @@ const axios = require('axios');
 require('dotenv').config();
 
 const { pool, initDB } = require('./db');
-const { sendOrderConfirmation, sendVendorNotification, sendStatusUpdateNotification } = require('./mail');
+const { sendOrderConfirmation, sendVendorNotification, sendStatusUpdateNotification, sendAdminLowBalanceWarning } = require('./mail');
+
+async function deductFromAdminWallet(amount, connectionToUse) {
+  try {
+    await connectionToUse.query('UPDATE admin_wallet SET balance = balance - ? WHERE id = 1', [amount]);
+    const [rows] = await connectionToUse.query('SELECT balance, low_balance_threshold FROM admin_wallet WHERE id = 1');
+    if (rows.length > 0) {
+      const { balance, low_balance_threshold } = rows[0];
+      if (parseFloat(balance) < parseFloat(low_balance_threshold)) {
+        sendAdminLowBalanceWarning(balance, low_balance_threshold);
+      }
+    }
+  } catch (error) {
+    console.error('Error deducting from admin wallet:', error.message);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 5010;
@@ -228,6 +243,130 @@ app.post('/yali_api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// OTP Request Route
+app.post('/yali_api/auth/request-otp', async (req, res) => {
+  const { identifier } = req.body;
+  if (!identifier) {
+    return res.status(400).json({ error: 'Email or phone is required' });
+  }
+
+  try {
+    // Generate 6-digit OTP
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60000); // 5 minutes
+
+    // Delete existing unused OTPs for this identifier to prevent spam
+    await pool.query('DELETE FROM otp_codes WHERE identifier = ?', [identifier]);
+
+    // Insert new OTP
+    await pool.query(
+      'INSERT INTO otp_codes (identifier, code, expires_at) VALUES (?, ?, ?)',
+      [identifier, code, expiresAt]
+    );
+
+    // Mock sending OTP - log to console
+    console.log(`\n========================================`);
+    console.log(`🔐 OTP for ${identifier}: ${code}`);
+    console.log(`========================================\n`);
+
+    res.json({ message: 'OTP sent successfully' });
+  } catch (error) {
+    console.error('Request OTP error:', error);
+    res.status(500).json({ error: 'Server error during OTP generation' });
+  }
+});
+
+// OTP Verify Route
+app.post('/yali_api/auth/verify-otp', async (req, res) => {
+  const { identifier, code } = req.body;
+  if (!identifier || !code) {
+    return res.status(400).json({ error: 'Identifier and code are required' });
+  }
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // Verify OTP
+    const [otps] = await connection.query(
+      'SELECT * FROM otp_codes WHERE identifier = ? AND code = ? AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1',
+      [identifier, code]
+    );
+
+    if (otps.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Invalid or expired OTP' });
+    }
+
+    // OTP verified, delete it
+    await connection.query('DELETE FROM otp_codes WHERE identifier = ?', [identifier]);
+
+    // Check if user exists (by email or phone)
+    let [users] = await connection.query('SELECT * FROM users WHERE email = ? OR phone = ?', [identifier, identifier]);
+    let user;
+
+    if (users.length === 0) {
+      // Auto-create guest user
+      const isEmail = identifier.includes('@');
+      const defaultEmail = isEmail ? identifier : `${identifier}@guest.yali.com`;
+      const defaultPhone = isEmail ? null : identifier;
+      const defaultName = 'Guest User';
+      const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-10), 10);
+
+      const [insertRes] = await connection.query(
+        'INSERT INTO users (name, email, phone, password, role, status) VALUES (?, ?, ?, ?, ?, ?)',
+        [defaultName, defaultEmail, defaultPhone, randomPassword, 'customer', 'active']
+      );
+
+      [users] = await connection.query('SELECT * FROM users WHERE id = ?', [insertRes.insertId]);
+    }
+
+    user = users[0];
+
+    if (user.status === 'disabled') {
+      await connection.rollback();
+      return res.status(403).json({ error: 'Your account is disabled.' });
+    }
+
+    await connection.commit();
+
+    // Generate Token
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role, 
+        managed_category: user.managed_category 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        wallet: parseFloat(user.wallet),
+        role: user.role,
+        status: user.status,
+        managed_category: user.managed_category
+      }
+    });
+
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ error: 'Server error during OTP verification' });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -859,6 +998,20 @@ app.post('/yali_api/orders', authenticateToken, async (req, res) => {
       await connection.query('UPDATE products SET stock = ? WHERE id = ?', [currentStock - item.quantity, item.id]);
     }
 
+    // Auto-Routing Engine Setup (fetch rules once)
+    let routingRules = [];
+    try {
+      const [rules] = await connection.query(`
+        SELECT vendor_id, rule_type, target_value, priority_score 
+        FROM vendor_routing_rules 
+        WHERE is_active = TRUE 
+        ORDER BY priority_score ASC
+      `);
+      routingRules = rules;
+    } catch (e) {
+      console.error("Routing engine rules fetch error:", e);
+    }
+
     // 4. Save order record
     const orderId = 'ORD-' + Math.random().toString(36).substring(2, 11).toUpperCase();
     const initialHistory = JSON.stringify([{ status: 'Pending', date: new Date().toISOString() }]);
@@ -884,8 +1037,26 @@ app.post('/yali_api/orders', authenticateToken, async (req, res) => {
 
     // 5. Save order items
     for (const item of items) {
+      let itemVendorId = null;
+      
+      // Auto-Routing per item
+      for (const rule of routingRules) {
+        if (rule.rule_type === 'product' && rule.target_value === item.id.toString()) {
+          itemVendorId = rule.vendor_id;
+          break;
+        }
+        if (rule.rule_type === 'region' && rule.target_value && address.toLowerCase().includes(rule.target_value.toLowerCase())) {
+          itemVendorId = rule.vendor_id;
+          break;
+        }
+        if (rule.rule_type === 'global') {
+          itemVendorId = rule.vendor_id;
+          break;
+        }
+      }
+
       await connection.query(
-        'INSERT INTO order_items (order_id, product_id, name, price, quantity, image, variant_id, variant_desc) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO order_items (order_id, product_id, name, price, quantity, image, variant_id, variant_desc, vendor_id, item_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           orderId,
           item.id,
@@ -894,7 +1065,9 @@ app.post('/yali_api/orders', authenticateToken, async (req, res) => {
           parseInt(item.quantity),
           item.image,
           item.variant_id || null,
-          item.variant_desc || null
+          item.variant_desc || null,
+          itemVendorId,
+          'Pending'
         ]
       );
     }
@@ -940,7 +1113,7 @@ app.get('/yali_api/orders', authenticateToken, async (req, res) => {
       sql = 'SELECT * FROM orders WHERE customer_id = ?';
       params.push(req.user.id);
     } else if (req.user.role === 'vendor') {
-      sql = 'SELECT * FROM orders WHERE assigned_vendor_id = ?';
+      sql = 'SELECT DISTINCT o.* FROM orders o JOIN order_items oi ON o.order_id = oi.order_id WHERE oi.vendor_id = ?';
       params.push(req.user.id);
     } else if (req.user.role === 'admin') {
       if (req.user.managed_category && req.user.managed_category !== 'all') {
@@ -957,6 +1130,15 @@ app.get('/yali_api/orders', authenticateToken, async (req, res) => {
     const enrichedOrders = [];
     for (const order of orders) {
       const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.order_id]);
+      
+      // If vendor, only return their specific items
+      const visibleItems = req.user.role === 'vendor' 
+        ? items.filter(it => it.vendor_id === req.user.id)
+        : items;
+
+      // If a vendor is viewing an order but somehow has no visible items left (edge case), skip it
+      if (req.user.role === 'vendor' && visibleItems.length === 0) continue;
+
       enrichedOrders.push({
         ...order,
         subtotal: parseFloat(order.subtotal),
@@ -964,8 +1146,9 @@ app.get('/yali_api/orders', authenticateToken, async (req, res) => {
         shipping: parseFloat(order.shipping),
         discount: parseFloat(order.discount),
         total: parseFloat(order.total),
-        items: items.map(it => ({
+        items: visibleItems.map(it => ({
           ...it,
+          item_id: it.id, // Primary key of order_items table
           id: it.product_id, // Map for frontend convenience
           price: parseFloat(it.price)
         }))
@@ -1098,6 +1281,7 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
     // If order was cancelled and was paid via WALLET, refund customer wallet balance
     if (status === 'Cancelled' && order.payment_method === 'WALLET' && order.status !== 'Cancelled') {
       await pool.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [order.total, order.customer_id]);
+      await deductFromAdminWallet(order.total, pool);
       
       // Log wallet transaction
       const txnId = 'TXN-REF-' + Date.now();
@@ -1110,6 +1294,7 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
     // If order is returned, refund the product price (subtotal) directly to wallet regardless of payment method
     if (status === 'Returned' && order.status !== 'Returned') {
       await pool.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [order.subtotal, order.customer_id]);
+      await deductFromAdminWallet(order.subtotal, pool);
       
       // Log wallet transaction
       const txnId = 'TXN-RET-' + Date.now();
@@ -1149,6 +1334,42 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Update order status error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update Order Item status (Vendor specific)
+app.put('/yali_api/order-items/:id/status', authenticateToken, async (req, res) => {
+  const itemId = req.params.id;
+  const { status, trackingNumber } = req.body;
+
+  try {
+    const [items] = await pool.query('SELECT * FROM order_items WHERE id = ?', [itemId]);
+    if (items.length === 0) return res.status(404).json({ error: 'Order item not found' });
+
+    const item = items[0];
+
+    // Authorization: Vendor can only update their own items, Admin can update anything.
+    if (req.user.role === 'vendor' && item.vendor_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized: This item is not assigned to you' });
+    }
+
+    let query = 'UPDATE order_items SET item_status = ?';
+    const params = [status];
+
+    if (trackingNumber !== undefined) {
+      query += ', tracking_number = ?';
+      params.push(trackingNumber);
+    }
+
+    query += ' WHERE id = ?';
+    params.push(itemId);
+
+    await pool.query(query, params);
+
+    res.json({ message: 'Order item updated successfully' });
+  } catch (error) {
+    console.error('Update order item status error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1260,6 +1481,7 @@ app.post('/yali_api/orders/:id/cancel', authenticateToken, async (req, res) => {
       
       // Credit wallet
       await connection.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [refundAmount, order.customer_id]);
+      await deductFromAdminWallet(refundAmount, connection);
       
       // Log transaction
       const txnId = 'TXN-CAN-' + Date.now();
@@ -1357,6 +1579,7 @@ app.post('/yali_api/admin/orders/:id/approve_return', authenticateToken, async (
 
     // Credit wallet
     await connection.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [productPriceOnly, order.customer_id]);
+    await deductFromAdminWallet(productPriceOnly, connection);
     
     const txnId = 'TXN-RET-' + Date.now();
     await connection.query(
@@ -2836,6 +3059,711 @@ app.delete('/yali_api/careers/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Delete career error:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// 💼 ADMIN WALLET ROUTES
+// -------------------------------------------------------------
+
+app.get('/yali_api/admin/wallet', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only access' });
+  try {
+    const [rows] = await pool.query('SELECT balance, low_balance_threshold FROM admin_wallet WHERE id = 1');
+    if (rows.length === 0) return res.status(404).json({ error: 'Admin wallet not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Fetch admin wallet error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/yali_api/admin/wallet/threshold', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only access' });
+  const { threshold } = req.body;
+  if (threshold === undefined || isNaN(parseFloat(threshold))) {
+    return res.status(400).json({ error: 'Valid threshold value required' });
+  }
+  try {
+    await pool.query('UPDATE admin_wallet SET low_balance_threshold = ? WHERE id = 1', [parseFloat(threshold)]);
+    res.json({ message: 'Low balance threshold updated successfully' });
+  } catch (error) {
+    console.error('Update threshold error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/yali_api/admin/wallet/topup', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only access' });
+  const { amount } = req.body;
+  if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+    return res.status(400).json({ error: 'Valid top-up amount required' });
+  }
+  try {
+    await pool.query('UPDATE admin_wallet SET balance = balance + ? WHERE id = 1', [parseFloat(amount)]);
+    res.json({ message: 'Admin wallet topped up successfully' });
+  } catch (error) {
+    console.error('Topup admin wallet error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// 💳 PAYMENT GATEWAY ROUTES
+// -------------------------------------------------------------
+
+// Mobile App / Public endpoint to get the active gateway
+app.get('/yali_api/settings/payment-gateways/active', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT name, display_name, config FROM payment_gateways WHERE is_active = TRUE LIMIT 1');
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'No active payment gateway found' });
+    }
+    
+    const activeGateway = rows[0];
+    let config = {};
+    try {
+      config = typeof activeGateway.config === 'string' ? JSON.parse(activeGateway.config) : activeGateway.config;
+    } catch (e) {
+      config = {};
+    }
+
+    // Filter out secret keys for the mobile app, exposing only publishable ones
+    const publicConfig = {};
+    if (activeGateway.name === 'stripe') {
+      publicConfig.publishableKey = config.publishableKey || '';
+    } else if (activeGateway.name === 'razorpay') {
+      publicConfig.keyId = config.keyId || '';
+    }
+    // For custom gateways, you might need a way to define which keys are public.
+    // For now, we only expose known public keys or empty if unknown.
+
+    res.json({
+      name: activeGateway.name,
+      display_name: activeGateway.display_name,
+      config: publicConfig
+    });
+  } catch (error) {
+    console.error('Fetch active payment gateway error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin endpoints
+app.get('/yali_api/admin/payment-gateways', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const [rows] = await pool.query('SELECT * FROM payment_gateways ORDER BY id ASC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch payment gateways error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/yali_api/admin/payment-gateways', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { name, display_name, config } = req.body;
+  if (!name || !display_name) return res.status(400).json({ error: 'Name and Display Name are required' });
+  
+  try {
+    const jsonConfig = config ? JSON.stringify(config) : '{}';
+    await pool.query(
+      'INSERT INTO payment_gateways (name, display_name, config) VALUES (?, ?, ?)',
+      [name.toLowerCase().replace(/\\s+/g, '_'), display_name, jsonConfig]
+    );
+    res.json({ message: 'Payment gateway added successfully' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Gateway with this name already exists' });
+    }
+    console.error('Add payment gateway error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/yali_api/admin/payment-gateways/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { display_name, config } = req.body;
+  
+  try {
+    let query = 'UPDATE payment_gateways SET ';
+    const params = [];
+    if (display_name) {
+      query += 'display_name = ?, ';
+      params.push(display_name);
+    }
+    if (config) {
+      query += 'config = ? ';
+      params.push(JSON.stringify(config));
+    } else {
+      query = query.slice(0, -2); // Remove trailing comma and space
+    }
+    
+    if (params.length === 0) return res.status(400).json({ error: 'Nothing to update' });
+    
+    query += ' WHERE id = ?';
+    params.push(req.params.id);
+    
+    await pool.query(query, params);
+    res.json({ message: 'Payment gateway updated successfully' });
+  } catch (error) {
+    console.error('Update payment gateway error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/yali_api/admin/payment-gateways/:id/activate', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    // Deactivate all
+    await connection.query('UPDATE payment_gateways SET is_active = FALSE');
+    
+    // Activate the selected one
+    const [result] = await connection.query('UPDATE payment_gateways SET is_active = TRUE WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Payment gateway not found' });
+    }
+    
+    await connection.commit();
+    res.json({ message: 'Payment gateway activated successfully' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Activate payment gateway error:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    connection.release();
+  }
+});
+
+app.delete('/yali_api/admin/payment-gateways/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  
+  try {
+    const [rows] = await pool.query('SELECT is_active FROM payment_gateways WHERE id = ?', [req.params.id]);
+    if (rows.length > 0 && rows[0].is_active) {
+      return res.status(400).json({ error: 'Cannot delete the currently active payment gateway. Please activate another one first.' });
+    }
+    
+    await pool.query('DELETE FROM payment_gateways WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Payment gateway deleted successfully' });
+  } catch (error) {
+    console.error('Delete payment gateway error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// VENDOR ROUTING API
+// -------------------------------------------------------------
+
+app.get('/yali_api/admin/vendor-routing', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const [rules] = await pool.query(`
+      SELECT r.*, u.name as vendor_name, u.email as vendor_email, vd.company_name
+      FROM vendor_routing_rules r
+      JOIN users u ON r.vendor_id = u.id
+      LEFT JOIN vendor_details vd ON u.id = vd.user_id
+      ORDER BY r.priority_score ASC
+    `);
+    res.json(rules);
+  } catch (error) {
+    console.error('Fetch vendor routing rules error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/yali_api/admin/vendor-routing', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { vendor_id, rule_type, target_value, priority_score, is_active } = req.body;
+  if (!vendor_id || !rule_type || !priority_score) return res.status(400).json({ error: 'Missing required fields' });
+  
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO vendor_routing_rules (vendor_id, rule_type, target_value, priority_score, is_active) VALUES (?, ?, ?, ?, ?)',
+      [vendor_id, rule_type, target_value || null, priority_score, is_active !== false]
+    );
+    res.status(201).json({ message: 'Routing rule added', id: result.insertId });
+  } catch (error) {
+    console.error('Create vendor routing rule error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/yali_api/admin/vendor-routing/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { vendor_id, rule_type, target_value, priority_score, is_active } = req.body;
+  
+  try {
+    await pool.query(
+      'UPDATE vendor_routing_rules SET vendor_id = ?, rule_type = ?, target_value = ?, priority_score = ?, is_active = ? WHERE id = ?',
+      [vendor_id, rule_type, target_value || null, priority_score, is_active, req.params.id]
+    );
+    res.json({ message: 'Routing rule updated successfully' });
+  } catch (error) {
+    console.error('Update vendor routing rule error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/yali_api/admin/vendor-routing/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    await pool.query('DELETE FROM vendor_routing_rules WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Routing rule deleted successfully' });
+  } catch (error) {
+    console.error('Delete vendor routing rule error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// PAYOUTS & SETTLEMENTS
+// -------------------------------------------------------------
+
+// Vendor saves bank details
+app.put('/yali_api/vendors/bank-details', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
+  const { bankAccountNumber, ifscCode, accountHolderName, bankName } = req.body;
+  
+  if (!bankAccountNumber || !ifscCode || !accountHolderName || !bankName) {
+    return res.status(400).json({ error: 'All bank details are required' });
+  }
+
+  const bankDetailsJSON = JSON.stringify({ bankAccountNumber, ifscCode, accountHolderName, bankName });
+
+  try {
+    await pool.query('UPDATE vendor_details SET bank_details = ? WHERE user_id = ?', [bankDetailsJSON, req.user.id]);
+    res.json({ message: 'Bank details saved successfully' });
+  } catch (error) {
+    console.error('Save bank details error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Vendor requests payout
+app.post('/yali_api/payouts/request', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
+  const { amount } = req.body;
+  
+  if (!amount || isNaN(amount) || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [users] = await conn.query('SELECT wallet FROM users WHERE id = ? FOR UPDATE', [req.user.id]);
+    if (users.length === 0) throw new Error('Vendor not found');
+    
+    const walletBalance = parseFloat(users[0].wallet);
+    if (walletBalance < amount) {
+      throw new Error('Insufficient wallet balance');
+    }
+
+    // Deduct from wallet immediately to hold the funds
+    await conn.query('UPDATE users SET wallet = wallet - ? WHERE id = ?', [amount, req.user.id]);
+
+    // Create request
+    await conn.query('INSERT INTO payout_requests (vendor_id, amount) VALUES (?, ?)', [req.user.id, amount]);
+
+    await conn.commit();
+    res.json({ message: 'Payout requested successfully' });
+  } catch (error) {
+    await conn.rollback();
+    console.error('Payout request error:', error);
+    res.status(400).json({ error: error.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// Get payout requests
+app.get('/yali_api/payouts', authenticateToken, async (req, res) => {
+  try {
+    let query = `
+      SELECT p.*, u.name as vendor_name, u.email as vendor_email, vd.company_name, vd.bank_details 
+      FROM payout_requests p 
+      JOIN users u ON p.vendor_id = u.id 
+      LEFT JOIN vendor_details vd ON p.vendor_id = vd.user_id 
+    `;
+    const params = [];
+
+    if (req.user.role === 'vendor') {
+      query += ' WHERE p.vendor_id = ? ORDER BY p.created_at DESC';
+      params.push(req.user.id);
+    } else if (req.user.role === 'admin' || req.user.role === 'superadmin') {
+      query += ' ORDER BY p.created_at DESC';
+    } else {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const [rows] = await pool.query(query, params);
+    
+    // Parse bank details safely
+    const parsedRows = rows.map(r => ({
+      ...r,
+      bank_details: typeof r.bank_details === 'string' ? JSON.parse(r.bank_details) : r.bank_details
+    }));
+
+    res.json(parsedRows);
+  } catch (error) {
+    console.error('Fetch payouts error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin approves/rejects payout
+app.put('/yali_api/payouts/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { status, transaction_id, admin_notes } = req.body;
+  
+  if (!['Approved', 'Rejected'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  if (status === 'Approved' && !transaction_id) return res.status(400).json({ error: 'Transaction ID is required for approval' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [reqs] = await conn.query('SELECT * FROM payout_requests WHERE id = ? FOR UPDATE', [req.params.id]);
+    if (reqs.length === 0) throw new Error('Payout request not found');
+    const payoutReq = reqs[0];
+    
+    if (payoutReq.status !== 'Pending') {
+      throw new Error(`Cannot update request because it is already ${payoutReq.status}`);
+    }
+
+    if (status === 'Rejected') {
+      // Refund money back to vendor's wallet
+      await conn.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [payoutReq.amount, payoutReq.vendor_id]);
+    }
+
+    await conn.query(
+      'UPDATE payout_requests SET status = ?, transaction_id = ?, admin_notes = ? WHERE id = ?', 
+      [status, transaction_id || null, admin_notes || null, req.params.id]
+    );
+
+    // If approved, deduct from admin master wallet
+    if (status === 'Approved') {
+      await deductFromAdminWallet(payoutReq.amount, conn);
+    }
+
+    await conn.commit();
+    res.json({ message: `Payout request ${status.toLowerCase()}` });
+  } catch (error) {
+    await conn.rollback();
+    console.error('Process payout error:', error);
+    res.status(400).json({ error: error.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// -------------------------------------------------------------
+// RETURNS & REFUNDS (RMA)
+// -------------------------------------------------------------
+
+// Customer creates a return request
+app.post('/yali_api/returns/request', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'customer') return res.status(403).json({ error: 'Unauthorized' });
+  const { order_id, item_id, reason } = req.body;
+
+  if (!order_id || !item_id || !reason) {
+    return res.status(400).json({ error: 'order_id, item_id, and reason are required' });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Verify item belongs to customer and is Delivered
+    const [orders] = await conn.query('SELECT customer_id FROM orders WHERE order_id = ?', [order_id]);
+    if (orders.length === 0 || orders[0].customer_id !== req.user.id) throw new Error('Order not found or unauthorized');
+
+    const [items] = await conn.query('SELECT * FROM order_items WHERE id = ? AND order_id = ?', [item_id, order_id]);
+    if (items.length === 0) throw new Error('Order item not found');
+    const item = items[0];
+
+    if (item.item_status !== 'Delivered') {
+      throw new Error(`Item cannot be returned (current status: ${item.item_status})`);
+    }
+
+    // Check if already requested
+    const [existing] = await conn.query('SELECT * FROM return_requests WHERE item_id = ?', [item_id]);
+    if (existing.length > 0) throw new Error('Return already requested for this item');
+
+    // Create return request
+    await conn.query(
+      'INSERT INTO return_requests (order_id, item_id, customer_id, vendor_id, reason) VALUES (?, ?, ?, ?, ?)',
+      [order_id, item_id, req.user.id, item.vendor_id, reason]
+    );
+
+    // Update item status
+    await conn.query('UPDATE order_items SET item_status = "Return Requested" WHERE id = ?', [item_id]);
+
+    await conn.commit();
+    res.json({ message: 'Return request submitted successfully' });
+  } catch (error) {
+    await conn.rollback();
+    console.error('Return request error:', error);
+    res.status(400).json({ error: error.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// Fetch return requests (Admin/Vendor)
+app.get('/yali_api/returns', authenticateToken, async (req, res) => {
+  if (req.user.role === 'customer') return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    let query = `
+      SELECT r.*, u.name as customer_name, u.email as customer_email, 
+             v.name as vendor_name, vd.company_name,
+             oi.name as product_name, oi.price, oi.quantity, oi.image, oi.variant_desc
+      FROM return_requests r
+      JOIN users u ON r.customer_id = u.id
+      JOIN order_items oi ON r.item_id = oi.id
+      LEFT JOIN users v ON r.vendor_id = v.id
+      LEFT JOIN vendor_details vd ON r.vendor_id = vd.user_id
+    `;
+    const params = [];
+
+    if (req.user.role === 'vendor') {
+      query += ' WHERE r.vendor_id = ? ORDER BY r.created_at DESC';
+      params.push(req.user.id);
+    } else {
+      query += ' ORDER BY r.created_at DESC';
+    }
+
+    const [rows] = await pool.query(query, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch returns error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin/Vendor approves or rejects return
+app.put('/yali_api/returns/:id', authenticateToken, async (req, res) => {
+  if (req.user.role === 'customer') return res.status(403).json({ error: 'Unauthorized' });
+  const { status, admin_notes } = req.body;
+  
+  if (!['Approved', 'Rejected', 'Received'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [reqs] = await conn.query('SELECT * FROM return_requests WHERE id = ? FOR UPDATE', [req.params.id]);
+    if (reqs.length === 0) throw new Error('Return request not found');
+    const returnReq = reqs[0];
+
+    // Vendor authorization
+    if (req.user.role === 'vendor' && returnReq.vendor_id !== req.user.id) {
+      throw new Error('Unauthorized to modify this return');
+    }
+
+    // Update return request
+    await conn.query(
+      'UPDATE return_requests SET status = ?, admin_notes = ? WHERE id = ?',
+      [status, admin_notes || returnReq.admin_notes, req.params.id]
+    );
+
+    // Sync item status based on return status
+    let newItemStatus = null;
+    if (status === 'Approved') newItemStatus = 'Return Approved';
+    else if (status === 'Rejected') newItemStatus = 'Delivered'; // Revert back
+    else if (status === 'Received') newItemStatus = 'Returned';
+
+    if (newItemStatus) {
+      await conn.query('UPDATE order_items SET item_status = ? WHERE id = ?', [newItemStatus, returnReq.item_id]);
+    }
+
+    // Process refund to customer wallet if item is received back
+    if (status === 'Received') {
+      const [items] = await conn.query('SELECT price, quantity FROM order_items WHERE id = ?', [returnReq.item_id]);
+      if (items.length > 0) {
+        const refundAmount = parseFloat(items[0].price) * parseInt(items[0].quantity);
+        
+        // 1. Credit the customer's wallet
+        await conn.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [refundAmount, returnReq.customer_id]);
+        
+        // 2. Log the wallet transaction
+        const txnId = 'TXN-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        await conn.query(
+          'INSERT INTO wallet_transactions (id, user_id, type, amount, description) VALUES (?, ?, ?, ?, ?)',
+          [txnId, returnReq.customer_id, 'credit', refundAmount, `Refund for returned item in Order #${returnReq.order_id}`]
+        );
+      }
+    }
+
+    await conn.commit();
+    res.json({ message: `Return request marked as ${status}` });
+  } catch (error) {
+    await conn.rollback();
+    console.error('Process return error:', error);
+    res.status(400).json({ error: error.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// -------------------------------------------------------------
+// REPORTS & ANALYTICS
+// -------------------------------------------------------------
+app.get('/yali_api/reports/:type', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
+
+  const { type } = req.params;
+  const { startDate, endDate, vendorId, category, status } = req.query;
+
+  let dateFilter = '';
+  let params = [];
+
+  const getDateColumn = (type) => {
+    if (type === 'sales' || type === 'vendors') return 'o.order_date';
+    if (type === 'inventory') return 'p.created_at';
+    if (type === 'returns') return 'r.created_at';
+    if (type === 'customers') return 'u.created_at';
+    if (type === 'abandoned') return 'c.created_at';
+    if (type === 'pincode') return 'o.order_date';
+    return null;
+  };
+
+  const dateCol = getDateColumn(type);
+  if (startDate && endDate && dateCol) {
+    dateFilter = ` AND DATE(${dateCol}) BETWEEN ? AND ? `;
+    params.push(startDate, endDate);
+  }
+
+  const vendorFilter = (vendorId && vendorId !== 'all') ? ` AND v.id = ? ` : '';
+  if (vendorId && vendorId !== 'all') params.push(vendorId);
+
+  const catFilter = (category && category !== 'all') ? ` AND p.category = ? ` : '';
+  if (category && category !== 'all') params.push(category);
+
+  try {
+    let query = '';
+    
+    switch (type) {
+      case 'sales':
+        query = `
+          SELECT 
+            o.order_id, o.order_date, o.customer_name, o.customer_email, o.subtotal, o.discount, o.shipping, o.tax as gst_tax, o.total, o.payment_method, o.status,
+            GROUP_CONCAT(DISTINCT v.name SEPARATOR ', ') as vendors
+          FROM orders o
+          LEFT JOIN order_items oi ON o.order_id = oi.order_id
+          LEFT JOIN products p ON oi.product_id = p.id
+          LEFT JOIN users v ON p.vendor_id = v.id
+          WHERE 1=1 ${dateFilter} ${vendorFilter} ${catFilter}
+        `;
+        if (status && status !== 'all') {
+          query += ` AND o.status = ? `;
+          params.push(status);
+        }
+        query += ` GROUP BY o.order_id ORDER BY o.order_date DESC`;
+        break;
+
+      case 'vendors':
+        query = `
+          SELECT 
+            v.name as vendor_name, v.email as vendor_email,
+            o.order_id, oi.item_status, p.name as product_name, oi.price, oi.quantity, 
+            (oi.price * oi.quantity) as total_amount,
+            ((oi.price * oi.quantity) * 0.10) as platform_commission,
+            ((oi.price * oi.quantity) * 0.90) as net_payable,
+            o.order_date
+          FROM order_items oi
+          JOIN orders o ON oi.order_id = o.order_id
+          JOIN products p ON oi.product_id = p.id
+          JOIN users v ON p.vendor_id = v.id
+          WHERE p.vendor_id IS NOT NULL ${dateFilter} ${vendorFilter}
+          ORDER BY o.order_date DESC
+        `;
+        break;
+
+      case 'inventory':
+        query = `
+          SELECT 
+            p.unique_id, p.name as product_name, p.price, p.original_price, p.category, p.stock, p.status, p.rating, v.name as vendor_name
+          FROM products p
+          LEFT JOIN users v ON p.vendor_id = v.id
+          WHERE 1=1 ${dateFilter.replace('p.created_at', 'p.created_at')} ${vendorFilter} ${catFilter}
+        `;
+        if (status && status !== 'all') {
+          query += ` AND p.status = ? `;
+          params.push(status);
+        }
+        break;
+
+      case 'returns':
+        query = `
+          SELECT 
+            r.id as return_id, r.order_id, oi.item_status, r.reason, r.status, r.admin_notes, r.created_at as request_date, 
+            u.name as customer_name, v.name as vendor_name,
+            (oi.price * oi.quantity) as potential_refund_amount
+          FROM return_requests r
+          JOIN order_items oi ON r.item_id = oi.id
+          JOIN users u ON r.customer_id = u.id
+          LEFT JOIN users v ON r.vendor_id = v.id
+          WHERE 1=1 ${dateFilter} ${vendorFilter}
+          ORDER BY r.created_at DESC
+        `;
+        break;
+
+      case 'customers':
+        query = `
+          SELECT 
+            u.name, u.email, u.phone, u.wallet, u.created_at as joined_date, 
+            COUNT(DISTINCT o.order_id) as total_orders, 
+            SUM(o.total) as lifetime_value
+          FROM users u
+          LEFT JOIN orders o ON u.id = o.customer_id
+          WHERE u.role = 'customer' ${dateFilter.replace('u.created_at', 'u.created_at')}
+          GROUP BY u.id
+          ORDER BY lifetime_value DESC
+        `;
+        break;
+
+      case 'pincode':
+        query = `
+          SELECT 
+            SUBSTRING_INDEX(SUBSTRING_INDEX(o.address, '-', -1), ' ', -1) as extracted_pincode, 
+            COUNT(o.order_id) as total_deliveries,
+            SUM(o.total) as revenue_from_pincode
+          FROM orders o
+          WHERE 1=1 ${dateFilter}
+          GROUP BY extracted_pincode
+          ORDER BY total_deliveries DESC
+        `;
+        break;
+        
+      case 'abandoned':
+        query = `
+          SELECT 
+            u.name as customer_name, u.email as customer_email, u.phone,
+            COUNT(c.id) as items_in_cart,
+            MIN(c.created_at) as cart_started_at
+          FROM cart_items c
+          JOIN users u ON c.user_id = u.id
+          WHERE c.status = 'active'
+          GROUP BY c.user_id
+        `;
+        break;
+
+      default:
+        return res.status(400).json({ error: 'Invalid report type' });
+    }
+
+    const [rows] = await pool.query(query, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Report generation error:', error);
+    res.status(500).json({ error: 'Failed to generate report' });
   }
 });
 

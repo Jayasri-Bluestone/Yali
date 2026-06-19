@@ -1,8 +1,10 @@
 import { ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export function HeroBanner({ banners = [], onCategoryClick }) {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!banners || banners.length <= 1) return;
@@ -30,7 +32,7 @@ export function HeroBanner({ banners = [], onCategoryClick }) {
         <div
           key={banner.id}
           className={`absolute inset-0 transition-all duration-700 ${
-            index === currentSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+            index === currentSlide ? 'opacity-100 scale-100 z-10 pointer-events-auto' : 'opacity-0 scale-105 z-0 pointer-events-none'
           }`}
         >
           {/* Background Image */}
@@ -61,6 +63,8 @@ export function HeroBanner({ banners = [], onCategoryClick }) {
                 onClick={() => {
                   if (banner.category && onCategoryClick) {
                     onCategoryClick(banner.category);
+                  } else {
+                    navigate('/search');
                   }
                 }}
                 className="px-6 md:px-8 py-3 md:py-4 bg-white text-[#0066cc] rounded-lg font-semibold text-base md:text-lg hover:shadow-2xl hover:scale-105 transition-all cursor-pointer"

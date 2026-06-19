@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, Mail, ArrowLeft, ShieldCheck, KeyRound } from 'lucide-react';
+import { Lock, Mail, ArrowLeft, ShieldCheck, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import { API_URL } from '../../config';
@@ -9,6 +9,7 @@ export function AdminLogin({ onSuccess, onGoBack }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -92,13 +93,20 @@ export function AdminLogin({ onSuccess, onGoBack }) {
             <div className="relative">
               <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-slate-950/40 border border-slate-800 focus:border-purple-500 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm transition-all"
+                className="w-full pl-12 pr-12 py-3 bg-slate-950/40 border border-slate-800 focus:border-purple-500 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm transition-all"
                 placeholder="••••••••"
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 

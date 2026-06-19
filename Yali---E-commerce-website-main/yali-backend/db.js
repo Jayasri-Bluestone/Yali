@@ -9,7 +9,9 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 });
 
 async function initDB() {
@@ -41,6 +43,7 @@ async function initDB() {
         company_name VARCHAR(255) NOT NULL,
         store_description TEXT,
         tax_id VARCHAR(100) NULL,
+        bank_details JSON NULL,
         status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -438,7 +441,25 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // 13. Create Visitor Locations Table
+    // 13. Create Return Requests Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS return_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_id VARCHAR(50) NOT NULL,
+        item_id INT NOT NULL,
+        customer_id INT NOT NULL,
+        vendor_id INT NULL,
+        reason TEXT NOT NULL,
+        status ENUM('Pending', 'Approved', 'Rejected', 'Received') DEFAULT 'Pending',
+        admin_notes TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (item_id) REFERENCES order_items(id) ON DELETE CASCADE,
+        FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 14. Create Visitor Locations Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS visitor_locations (
         id INT AUTO_INCREMENT PRIMARY KEY,

@@ -457,18 +457,18 @@ export function ProductDetailsPage({
                 <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-indigo-600" /> Deliver to
                 </h3>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input 
                     type="text" 
                     maxLength={6}
                     placeholder="Enter Delivery Pincode"
                     value={pincode}
                     onChange={(e) => setPincode(e.target.value)}
-                    className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex-1 min-w-0 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                   <button 
                     onClick={checkDelivery}
-                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-colors"
+                    className="px-6 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
                   >
                     Check
                   </button>
@@ -481,18 +481,18 @@ export function ProductDetailsPage({
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="flex flex-col sm:flex-row gap-3 mb-8">
                 <button 
                   onClick={() => onBuyNow({ ...product, selectedVariant })}
-                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-black py-4 rounded-xl hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm sm:text-base font-black py-3.5 sm:py-4 px-2 rounded-xl hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer whitespace-nowrap"
                 >
                   Buy Now
                 </button>
                 <button 
                   onClick={() => onAddToCart({ ...product, selectedVariant })}
-                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black py-4 rounded-xl hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm sm:text-base font-black py-3.5 sm:py-4 px-2 rounded-xl hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer whitespace-nowrap"
                 >
-                  <ShoppingCart className="w-5 h-5" /> Add to Cart
+                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" /> Add to Cart
                 </button>
               </div>
 

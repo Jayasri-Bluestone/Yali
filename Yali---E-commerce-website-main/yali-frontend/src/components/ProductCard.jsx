@@ -23,6 +23,7 @@ export function ProductCard({ product, onAddToCart, onProductClick, isWishlisted
               New
             </span>
           )}
+          
           {product.badge && (
             <span className="bg-red-500 text-white px-2 py-1 rounded text-xs font-semibold shadow-sm">
               {product.badge}

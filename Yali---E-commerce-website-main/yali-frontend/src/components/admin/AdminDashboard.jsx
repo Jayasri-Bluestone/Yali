@@ -22,7 +22,10 @@ import {
   Trash2,
   Truck,
   RefreshCcw,
-  Briefcase
+  Briefcase,
+  Wallet,
+  CreditCard,
+  Landmark
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
@@ -45,8 +48,13 @@ import { LocationsTab } from './LocationsTab';
 import { ReviewsTab } from './ReviewsTab';
 import { PageBuilderTab } from './PageBuilderTab';
 import { DeliveryPartnersTab } from './DeliveryPartnersTab';
-import { RefundsReturnsTab } from './RefundsReturnsTab';
+import { ReturnsTab } from './ReturnsTab';
 import { CareersTab } from './CareersTab';
+import { AdminWalletTab } from './AdminWalletTab';
+import { PaymentGatewaysTab } from './PaymentGatewaysTab';
+import { SettlementsTab } from './SettlementsTab';
+import VendorRoutingTab from './VendorRoutingTab';
+import { ReportsTab } from './ReportsTab';
 import { FileUploadInput } from './FileUploadInput';
 import { API_URL } from '../../config';
 
@@ -168,25 +176,42 @@ export function AdminDashboard({
 
   // Tab control lists based on roles
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: TrendingUp, show: true },
-    { id: 'products', label: 'Products', icon: ShoppingBag, show: true },
-    { id: 'categories', label: 'Categories', icon: Tag, show: userData?.role === 'admin' },
-    { id: 'sub-categories', label: 'Sub-Cats', icon: Tag, show: userData?.role === 'admin' },
-    { id: 'orders', label: 'Orders', icon: Package, show: true },
-    { id: 'users', label: 'Customers', icon: Users, show: userData?.role === 'admin' },
-    { id: 'admins', label: 'Administrators', icon: ShieldCheck, show: isSuperAdmin },
-    { id: 'vendors', label: 'Vendor Partners', icon: Building, show: userData?.role === 'admin' },
-    { id: 'coupons', label: 'Coupons', icon: Percent, show: isSuperAdmin },
-    { id: 'page-builder', label: 'Page Builder', icon: Layers, show: isSuperAdmin || isCategoryAdmin },
-    { id: 'storefront', label: 'Banners', icon: FileImage, show: isSuperAdmin || isCategoryAdmin },
-    { id: 'ui-cards', label: 'Site Cards', icon: Layers, show: isSuperAdmin },
-    { id: 'videos', label: 'Spotlight Videos', icon: Film, show: isSuperAdmin || isCategoryAdmin },
-    { id: 'locations', label: 'Visitor Locations', icon: MapPin, show: isSuperAdmin },
-    { id: 'reviews', label: 'Product Reviews', icon: MessageSquare, show: userData?.role === 'admin' },
-    { id: 'delivery-partners', label: 'Delivery Partners', icon: Truck, show: isSuperAdmin },
-    { id: 'refunds-returns', label: 'Refunds & Returns', icon: RefreshCcw, show: userData?.role === 'admin' },
-    { id: 'careers', label: 'Careers', icon: Briefcase, show: isSuperAdmin }
+    { id: 'dashboard', label: 'Dashboard', icon: TrendingUp, show: true, group: 'General' },
+    { id: 'products', label: 'Products', icon: ShoppingBag, show: true, group: 'General' },
+    { id: 'orders', label: 'Orders', icon: Package, show: true, group: 'General' },
+    { id: 'categories', label: 'Categories', icon: Tag, show: userData?.role === 'admin', group: 'Catalog' },
+    { id: 'sub-categories', label: 'Sub-Cats', icon: Tag, show: userData?.role === 'admin', group: 'Catalog' },
+    { id: 'reviews', label: 'Product Reviews', icon: MessageSquare, show: userData?.role === 'admin', group: 'Catalog' },
+    
+    { id: 'users', label: 'Customers', icon: Users, show: userData?.role === 'admin', group: 'People & Accounts' },
+    { id: 'vendors', label: 'Vendor Partners', icon: Building, show: userData?.role === 'admin', group: 'People & Accounts' },
+    { id: 'admins', label: 'Administrators', icon: ShieldCheck, show: isSuperAdmin, group: 'People & Accounts' },
+    
+    { id: 'page-builder', label: 'Page Builder', icon: Layers, show: isSuperAdmin || isCategoryAdmin, group: 'Storefront' },
+    { id: 'storefront', label: 'Banners', icon: FileImage, show: isSuperAdmin || isCategoryAdmin, group: 'Storefront' },
+    { id: 'ui-cards', label: 'Site Cards', icon: Layers, show: isSuperAdmin, group: 'Storefront' },
+    { id: 'videos', label: 'Spotlight Videos', icon: Film, show: isSuperAdmin || isCategoryAdmin, group: 'Storefront' },
+    
+    { id: 'vendor-routing', label: 'Vendor Routing', icon: RefreshCcw, show: isSuperAdmin, group: 'Operations' },
+    { id: 'delivery-partners', label: 'Delivery Partners', icon: Truck, show: isSuperAdmin, group: 'Operations' },
+    { id: 'refunds-returns', label: 'Refunds & Returns', icon: RefreshCcw, show: userData?.role === 'admin' || isVendor, group: 'Operations' },
+    { id: 'careers', label: 'Careers', icon: Briefcase, show: isSuperAdmin, group: 'Operations' },
+
+    { id: 'coupons', label: 'Coupons', icon: Percent, show: isSuperAdmin, group: 'Marketing & Finance' },
+    { id: 'admin-wallet', label: 'Admin Wallet', icon: Wallet, show: isSuperAdmin, group: 'Marketing & Finance' },
+    { id: 'payment-gateways', label: 'Payment Gateways', icon: CreditCard, show: isSuperAdmin, group: 'Marketing & Finance' },
+    { id: 'settlements', label: 'Payouts', icon: Landmark, show: isSuperAdmin || isVendor, group: 'Marketing & Finance' },
+    
+    { id: 'reports', label: 'Reports & Analytics', icon: FileSpreadsheet, show: isSuperAdmin || isVendor, group: 'Analytics' },
+    { id: 'locations', label: 'Visitor Locations', icon: MapPin, show: isSuperAdmin, group: 'Analytics' },
   ].filter(t => t.show);
+
+  // Group tabs for rendering
+  const groupedTabs = tabs.reduce((acc, tab) => {
+    if (!acc[tab.group]) acc[tab.group] = [];
+    acc[tab.group].push(tab);
+    return acc;
+  }, {});
 
   // -------------------------------------------------------------
   // API Operations
@@ -421,6 +446,27 @@ export function AdminDashboard({
       if (!res.ok) throw new Error(data.error || 'Failed to update order status');
 
       showToast(data.message || `Order status updated to ${newStatus}`, 'success');
+      refreshOrders();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleOrderItemStatusChange = async (itemId, newStatus, extraData = {}) => {
+    try {
+      const res = await fetch(`${API_URL}/order-items/${itemId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus, ...extraData })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update item status');
+
+      showToast(data.message || `Item status updated to ${newStatus}`, 'success');
       refreshOrders();
     } catch (err) {
       showToast(err.message, 'error');
@@ -663,27 +709,36 @@ export function AdminDashboard({
           </div>
 
           {/* Navigation Links */}
-          <nav className="flex-1 py-4 overflow-y-auto space-y-1.5 px-3">
-            {tabs.map(tab => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    navigate(`/admin/${tab.id}`);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-xs transition-all cursor-pointer ${isActive
-                      ? 'bg-gradient-to-r from-purple-700 to-indigo-650 text-white shadow-md shadow-indigo-900/30'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
-                    }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
+          <nav className="flex-1 py-4 overflow-y-auto space-y-6 px-3">
+            {Object.entries(groupedTabs).map(([groupName, groupTabs]) => (
+              <div key={groupName}>
+                <h3 className="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  {groupName}
+                </h3>
+                <div className="space-y-1">
+                  {groupTabs.map(tab => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          navigate(`/admin/${tab.id}`);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${isActive
+                            ? 'bg-gradient-to-r from-purple-700 to-indigo-650 text-white shadow-md shadow-indigo-900/30'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                          }`}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
         </div>
 
@@ -823,19 +878,22 @@ export function AdminDashboard({
                 isSuperAdmin={isSuperAdmin}
                 approvedVendors={approvedVendors}
                 handleOrderStatusChange={handleOrderStatusChange}
+                handleOrderItemStatusChange={handleOrderItemStatusChange}
                 handleAssignOrder={handleAssignOrder}
                 handleTrackingUpdate={handleTrackingUpdate}
                 handleDeliveryDateUpdate={handleDeliveryDateUpdate}
               />
             } />
 
-            {userData?.role === 'admin' && (
+            {(userData?.role === 'admin' || isVendor) && (
               <Route path="/admin/refunds-returns" element={
-                <RefundsReturnsTab
-                  orders={filteredOrders}
-                  token={token}
-                  refreshOrders={refreshOrders}
-                />
+                <ReturnsTab token={token} userData={userData} isVendor={isVendor} />
+              } />
+            )}
+
+            {(userData?.role === 'admin' || isVendor) && (
+              <Route path="/admin/reports" element={
+                <ReportsTab userData={userData} token={token} />
               } />
             )}
 
@@ -853,13 +911,27 @@ export function AdminDashboard({
             )}
 
             {isSuperAdmin && (
-              <Route path="/admin/admins" element={
-                <AdminsTab
-                  users={users}
-                  categoriesList={categoriesList}
-                  handleToggleUserStatus={handleToggleUserStatus}
-                  handleUserRoleChange={handleUserRoleChange}
-                />
+              <>
+                <Route path="/admin/admins" element={
+                  <AdminsTab
+                    users={users}
+                    categoriesList={categoriesList}
+                    handleToggleUserStatus={handleToggleUserStatus}
+                    handleUserRoleChange={handleUserRoleChange}
+                  />
+                } />
+                <Route path="/admin/admin-wallet" element={
+                  <AdminWalletTab token={token} />
+                } />
+                <Route path="/admin/payment-gateways" element={
+                  <PaymentGatewaysTab token={token} />
+                } />
+              </>
+            )}
+
+            {(isSuperAdmin || isVendor) && (
+              <Route path="/admin/settlements" element={
+                <SettlementsTab token={token} userData={userData} isVendor={isVendor} />
               } />
             )}
 
@@ -962,6 +1034,12 @@ export function AdminDashboard({
             {isSuperAdmin && (
               <Route path="/admin/careers" element={
                 <CareersTab />
+              } />
+            )}
+
+            {isSuperAdmin && (
+              <Route path="/admin/vendor-routing" element={
+                <VendorRoutingTab token={token} />
               } />
             )}
 

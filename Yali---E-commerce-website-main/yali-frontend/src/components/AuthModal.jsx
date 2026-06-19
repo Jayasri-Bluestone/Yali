@@ -1,4 +1,4 @@
-import { Mail, Lock, User, Phone, ArrowLeft, Check, Building, X } from 'lucide-react';
+import { Mail, Lock, User, Phone, ArrowLeft, Check, Building, X, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
@@ -20,6 +20,8 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
   const [companyName, setCompanyName] = useState('');
   const [storeDescription, setStoreDescription] = useState('');
   const [taxId, setTaxId] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
@@ -101,6 +103,54 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
 
     } catch (error) {
       showToast(error.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpRequest = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/request-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: email })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to request OTP');
+      
+      showToast('OTP sent successfully! Check backend console.', 'success');
+      setMode('otp_verify');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpVerify = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: email, code: otpCode })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invalid OTP');
+
+      localStorage.setItem('yali_token', data.token);
+      showToast('Successfully logged in!', 'success');
+      onSuccess?.(data.user, data.token);
+      onClose?.();
+      
+      setEmail('');
+      setOtpCode('');
+      setMode('login');
+    } catch (err) {
+      showToast(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -227,12 +277,12 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="flex-1 flex flex-col space-y-5">
+              <form onSubmit={mode === 'otp_request' ? handleOtpRequest : mode === 'otp_verify' ? handleOtpVerify : handleSubmit} className="flex-1 flex flex-col space-y-5">
                 
                 {/* Mobile Header (Only visible on small screens) */}
                 <div className="md:hidden mb-2">
                   <h2 className="text-2xl font-bold text-gray-900">
-                    {mode === 'login' ? 'Login' : mode === 'register' ? 'Register' : 'Reset Password'}
+                    {mode === 'login' ? 'Login' : mode === 'register' ? 'Register' : mode === 'otp_request' ? 'Login with OTP' : mode === 'otp_verify' ? 'Verify OTP' : 'Reset Password'}
                   </h2>
                 </div>
 
@@ -319,10 +369,11 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
 
                 <div className="relative mt-4">
                   <input
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="peer w-full pt-5 pb-2 border-b-2 border-gray-200 focus:border-[#0066cc] focus:outline-none transition-colors text-sm text-gray-900 bg-transparent placeholder-transparent"
+                    disabled={mode === 'otp_verify'}
+                    className="peer w-full pt-5 pb-2 border-b-2 border-gray-200 focus:border-[#0066cc] focus:outline-none transition-colors text-sm text-gray-900 bg-transparent placeholder-transparent disabled:text-gray-500"
                     placeholder="Enter Email/Mobile number"
                     required
                     id="authEmail"
@@ -332,13 +383,31 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
                   </label>
                 </div>
 
-                {mode !== 'forgot' && (
+                {mode === 'otp_verify' && (
                   <div className="relative">
                     <input
-                      type="password"
+                      type="text"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      className="peer w-full pt-5 pb-2 border-b-2 border-gray-200 focus:border-[#0066cc] focus:outline-none transition-colors text-sm text-gray-900 bg-transparent placeholder-transparent tracking-widest font-bold"
+                      placeholder="Enter 6-digit OTP"
+                      required
+                      maxLength={6}
+                      id="otpCodeInput"
+                    />
+                    <label htmlFor="otpCodeInput" className="absolute left-0 top-0 text-xs text-gray-500 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-0 peer-focus:text-xs peer-focus:text-[#0066cc]">
+                      Enter 6-digit OTP
+                    </label>
+                  </div>
+                )}
+
+                {(mode === 'login' || mode === 'register') && (
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="peer w-full pt-5 pb-2 border-b-2 border-gray-200 focus:border-[#0066cc] focus:outline-none transition-colors text-sm text-gray-900 bg-transparent placeholder-transparent"
+                      className="peer w-full pt-5 pb-2 pr-10 border-b-2 border-gray-200 focus:border-[#0066cc] focus:outline-none transition-colors text-sm text-gray-900 bg-transparent placeholder-transparent"
                       placeholder="Enter Password"
                       required
                       id="authPassword"
@@ -346,6 +415,13 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
                     <label htmlFor="authPassword" className="absolute left-0 top-0 text-xs text-gray-500 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-0 peer-focus:text-xs peer-focus:text-[#0066cc]">
                       Enter Password
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-0 bottom-2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                     
                     {mode === 'login' && (
                       <button
@@ -368,8 +444,27 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
                   disabled={loading}
                   className="w-full py-3.5 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white font-semibold text-[15px] shadow-sm hover:shadow-lg transition-all hover:opacity-90 disabled:opacity-70 mt-2 cursor-pointer rounded-md"
                 >
-                  {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : mode === 'register' ? 'Continue' : 'Request Link')}
+                  {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : mode === 'register' ? 'Continue' : mode === 'otp_request' ? 'Request OTP' : mode === 'otp_verify' ? 'Verify OTP' : 'Request Link')}
                 </button>
+
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('otp_request')}
+                    className="w-full py-3.5 mt-3 border border-[#0066cc] text-[#0066cc] font-semibold text-[15px] hover:bg-blue-50 transition-all cursor-pointer rounded-md"
+                  >
+                    Login with OTP
+                  </button>
+                )}
+                {mode === 'otp_request' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="w-full py-3.5 mt-3 border border-gray-300 text-gray-700 font-semibold text-[15px] hover:bg-gray-50 transition-all cursor-pointer rounded-md"
+                  >
+                    Login with Password
+                  </button>
+                )}
 
                 {mode === 'login' && (
                   <>

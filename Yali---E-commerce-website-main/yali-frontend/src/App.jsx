@@ -21,6 +21,8 @@ import { Footer } from './components/Footer';
 import { MyOrdersPage } from './components/MyOrdersPage';
 import { ScrollToTop } from './components/ScrollToTop';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { PullToRefresh } from './components/PullToRefresh';
 import { API_URL } from './config';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { StaticPage } from './components/StaticPage';
@@ -320,15 +322,15 @@ function HomePageSections({
       {/* ── 3. SHOP BY CATEGORY ── */}
       <section className="mt-10">
         <SectionHeader icon={Sparkles} iconColor="bg-gradient-to-br from-violet-500 to-purple-400" title="Shop by Category" subtitle="Find what you're looking for" />
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
           {brandCards.map((bc) => (
             <button
               key={bc.cat}
               onClick={() => onCategoryClick(bc.cat)}
-              className={`group flex flex-col items-center gap-2 p-4 rounded-2xl bg-gradient-to-br ${bc.gradient} text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer`}
+              className={`group flex flex-col items-center justify-center gap-1 sm:gap-2 p-2 sm:p-4 min-h-[90px] sm:min-h-[110px] rounded-2xl bg-gradient-to-br ${bc.gradient} text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer w-full overflow-hidden`}
             >
-              <span className="text-3xl">{bc.emoji}</span>
-              <span className="text-xs font-black text-center leading-tight">{bc.label}</span>
+              <span className="text-2xl sm:text-3xl flex-shrink-0">{bc.emoji}</span>
+              <span className="text-[10px] sm:text-xs font-black text-center leading-tight break-words w-full px-1">{bc.label}</span>
             </button>
           ))}
         </div>
@@ -538,10 +540,10 @@ function HomePageSections({
                 <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full" />
                 <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-white/5 rounded-full" />
                 {promo.icon && <span className="relative inline-block bg-white/25 text-white text-xs font-black px-3 py-1 rounded-full mb-3 uppercase tracking-wider">{promo.icon}</span>}
-                <h3 className="relative text-2xl font-black text-white mb-1">{promo.title}</h3>
-                {promo.subtitle && <p className="relative text-white/80 text-sm mb-4">{promo.subtitle}</p>}
-                <span className="relative inline-flex items-center gap-1.5 bg-white text-gray-800 text-xs font-black px-4 py-2 rounded-full group-hover:gap-2.5 transition-all">
-                  Explore Now <ChevronRight className="w-3.5 h-3.5" />
+                <h3 className="relative text-2xl sm:text-3xl font-black text-white mb-1 break-words">{promo.title}</h3>
+                {promo.subtitle && <p className="relative text-white/80 text-xs sm:text-sm mb-4 break-words">{promo.subtitle}</p>}
+                <span className="relative inline-flex items-center gap-1.5 bg-white text-gray-800 text-xs font-black px-3 sm:px-4 py-2 rounded-full group-hover:gap-2.5 transition-all w-fit max-w-full overflow-hidden">
+                  <span className="truncate">Explore Now</span> <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
                 </span>
               </div>
             ))}
@@ -1270,8 +1272,9 @@ export default function App() {
         />
 
         {/* Store view routes */}
-        <main className="max-w-7xl mx-auto px-4 py-6">
-          {(() => {
+        <main className="max-w-7xl mx-auto px-4 py-6 pb-20 md:pb-6">
+          <PullToRefresh>
+            {(() => {
             const activeProducts = products.filter(p => p.status === 'active');
             const activeBanners = banners.filter(b => b.status === 'active');
             const activeCategories = categories.filter(c => c.status === 'active');
@@ -1385,10 +1388,17 @@ export default function App() {
               </Routes>
             );
           })()}
+          </PullToRefresh>
         </main>
       </div>
 
       <Footer />
+
+      <MobileBottomNav 
+        cartCount={cartItems.length}
+        onCartClick={() => navigate('/cart')}
+        onAccountClick={handleAccountClick}
+      />
 
       <AuthModal
         isOpen={isAuthOpen}

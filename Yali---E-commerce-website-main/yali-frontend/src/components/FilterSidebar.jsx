@@ -132,29 +132,7 @@ export function FilterSidebar({
           {/* Price Slider Section */}
           <div className="p-4 border-b border-gray-200">
             <div className="text-[12px] font-medium text-gray-800 uppercase tracking-wide mb-4">
-              Price
-            </div>
-            
-            {/* Visual Slider */}
-            <div className="px-1.5 mb-5 relative">
-              <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-12 h-2.5 bg-gray-200/50 rounded-t-sm" />
-              <div className="relative h-1 bg-gray-300 rounded-full w-full">
-                {/* Active track */}
-                <div className="absolute left-0 right-0 h-full bg-[#2874f0]" />
-                {/* Left Handle */}
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white border border-gray-400 rounded-full shadow-sm cursor-pointer z-10" />
-                {/* Right Handle */}
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white border border-gray-400 rounded-full shadow-sm cursor-pointer z-10" />
-                {/* Ticks */}
-                <div className="absolute top-3 left-0 w-full flex justify-between px-1">
-                  <div className="w-0.5 h-0.5 bg-gray-400 rounded-full"/>
-                  <div className="w-0.5 h-0.5 bg-gray-400 rounded-full"/>
-                  <div className="w-0.5 h-0.5 bg-gray-400 rounded-full"/>
-                  <div className="w-0.5 h-0.5 bg-gray-400 rounded-full"/>
-                  <div className="w-0.5 h-0.5 bg-gray-400 rounded-full"/>
-                  <div className="w-0.5 h-0.5 bg-gray-400 rounded-full"/>
-                </div>
-              </div>
+              Price Range
             </div>
 
             {/* Min Max Selects */}
@@ -165,7 +143,7 @@ export function FilterSidebar({
                 className="w-full border border-gray-300 rounded-[2px] px-2 py-1 text-[13px] bg-white outline-none focus:border-[#2874f0] cursor-pointer text-gray-700 h-8"
               >
                 <option value="">Min</option>
-                {priceStops.filter(p => p).map(p => <option key={p} value={p.replace('+','')}>₹{p}</option>)}
+                {priceStops.filter(p => p && !p.includes('+')).map(p => <option key={p} value={p}>₹{p}</option>)}
               </select>
               <span className="text-[13px] text-gray-500">to</span>
               <select 
@@ -173,8 +151,8 @@ export function FilterSidebar({
                 onChange={(e) => onFilterChange({ ...filters, priceMax: e.target.value })}
                 className="w-full border border-gray-300 rounded-[2px] px-2 py-1 text-[13px] bg-white outline-none focus:border-[#2874f0] cursor-pointer text-gray-700 h-8"
               >
-                <option value="">₹30000+</option>
-                {priceStops.filter(p => p).map(p => <option key={p} value={p.replace('+','')}>₹{p}</option>)}
+                <option value="">Any</option>
+                {priceStops.filter(p => p && !p.includes('+')).map(p => <option key={p} value={p}>₹{p}</option>)}
               </select>
             </div>
           </div>
