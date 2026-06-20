@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCcw, CheckCircle, XCircle, Search, Filter, Loader, Eye, Box } from 'lucide-react';
+import { RefreshCcw, CheckCircle, XCircle, Search, Filter, Loader, Eye, Box, Download } from 'lucide-react';
+import { exportToCSV } from '../../utils/csvExport';
 import { API_URL } from '../../config';
 import { useToast } from '../../context/ToastContext';
 
@@ -101,7 +102,17 @@ export function ReturnsTab({ token, userData, isVendor }) {
               <RefreshCcw className="w-7 h-7 text-[#0066cc]" />
               Returns & Refunds (RMA)
             </h2>
-            <p className="text-gray-500 mt-1 text-sm font-medium">Manage customer return requests and refunds.</p>
+            <div className="flex items-center gap-4 mt-2">
+              <p className="text-gray-500 text-sm font-medium">Manage customer return requests and refunds.</p>
+              <button
+                onClick={() => exportToCSV(filteredReturns, 'returns')}
+                className="flex items-center gap-2 px-3 py-1 bg-white text-[#0066cc] hover:bg-blue-50 rounded-lg border border-blue-200 transition-colors text-xs font-bold"
+                title="Export Returns to CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export CSV
+              </button>
+            </div>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">

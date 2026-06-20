@@ -149,7 +149,7 @@ export function AdminDashboard({
   });
 
   const filteredOrders = orders.filter(o => {
-    if (isVendor) return o.assigned_vendor_id === userData.id;
+    if (isVendor) return o.items && o.items.some(i => i.vendor_id === userData.id);
     if (isCategoryAdmin) return o.category === adminCategory;
     return true; // Super admin sees all
   });
@@ -832,6 +832,7 @@ export function AdminDashboard({
                 categoriesList={categoriesList}
                 isCategoryAdmin={isCategoryAdmin}
                 adminCategory={adminCategory}
+                isVendor={isVendor}
                 handleImportCSV={handleImportCSV}
                 handleExportCSV={handleExportCSV}
                 setIsProductModalOpen={setIsProductModalOpen}
@@ -946,6 +947,8 @@ export function AdminDashboard({
                 <VendorsTab
                   users={users}
                   handleToggleUserStatus={handleToggleUserStatus}
+                  handleUserRoleChange={handleUserRoleChange}
+                  categoriesList={categoriesList}
                   refreshUsers={refreshUsers}
                   token={token}
                   categoriesList={categoriesList}
@@ -1112,10 +1115,16 @@ export function AdminDashboard({
                   <select
                     value={productForm.category}
                     onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                    disabled={isCategoryAdmin}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 cursor-pointer"
+                    disabled={isCategoryAdmin || (isVendor && !!userData?.managed_category && userData.managed_category !== 'all')}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 cursor-pointer disabled:opacity-75 disabled:bg-gray-100"
                   >
-                    {categoriesList.map(c => (
+                    {categoriesList
+                      .filter(c => {
+                        if (isCategoryAdmin) return c.value === adminCategory;
+                        if (isVendor && userData?.managed_category && userData.managed_category !== 'all') return c.value === userData.managed_category;
+                        return true;
+                      })
+                      .map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </select>

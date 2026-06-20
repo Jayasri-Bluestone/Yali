@@ -1833,6 +1833,65 @@ app.put('/yali_api/users/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
+// Update Vendor Details
+app.put('/yali_api/admin/vendors/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+
+  const vendorId = req.params.id;
+  const { name, email, phone, companyName, taxId, storeDescription } = req.body;
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // Update user table
+    await connection.query(
+      'UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ? AND role = "vendor"',
+      [name, email, phone || null, vendorId]
+    );
+
+    // Update vendor details table
+    await connection.query(
+      'UPDATE vendor_details SET company_name = ?, tax_id = ?, store_description = ? WHERE user_id = ?',
+      [companyName, taxId || null, storeDescription || null, vendorId]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Vendor updated successfully' });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Update vendor error:', error);
+    res.status(500).json({ error: 'Server error updating vendor' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// Delete Vendor
+app.delete('/yali_api/admin/vendors/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+
+  const vendorId = req.params.id;
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    await connection.query('DELETE FROM vendor_details WHERE user_id = ?', [vendorId]);
+    await connection.query('DELETE FROM users WHERE id = ? AND role = "vendor"', [vendorId]);
+
+    await connection.commit();
+    res.json({ message: 'Vendor deleted successfully' });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Delete vendor error:', error);
+    res.status(500).json({ error: 'Server error deleting vendor' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
 
 // -------------------------------------------------------------
 // 🏷️ COUPON ROUTES
@@ -3619,7 +3678,12 @@ app.get('/yali_api/reports/:type', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
 
   const { type } = req.params;
-  const { startDate, endDate, vendorId, category, status } = req.query;
+  let { startDate, endDate, vendorId, category, status } = req.query;
+
+  // Enforce vendor isolation - vendors can only request their own reports
+  if (req.user.role === 'vendor') {
+    vendorId = req.user.id;
+  }
 
   let dateFilter = '';
   let params = [];

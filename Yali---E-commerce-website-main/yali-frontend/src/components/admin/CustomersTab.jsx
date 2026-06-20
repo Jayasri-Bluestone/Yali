@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
 import { API_URL } from '../../config';
-import { ShoppingCart, Heart, XCircle, Eye, Bookmark } from 'lucide-react';
+import { ShoppingCart, Heart, XCircle, Eye, Bookmark, Download } from 'lucide-react';
+import { exportToCSV } from '../../utils/csvExport';
 import { Pagination } from './Pagination';
 
 export function CustomersTab({
@@ -16,11 +17,11 @@ export function CustomersTab({
   const [wishlists, setWishlists] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
   const filteredUsers = users.filter(u => u.role === 'customer');
-  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
-  const currentItems = filteredUsers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const currentItems = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   useEffect(() => {
     if (!token) return;
@@ -36,7 +37,17 @@ export function CustomersTab({
   }, [token]);
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
-      <h2 className="text-xl font-bold text-gray-950">Registered Customer Directory</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-950">Registered Customer Directory</h2>
+        <button
+          onClick={() => exportToCSV(filteredUsers, 'customers')}
+          className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] rounded-lg border border-gray-200 transition-colors text-sm font-semibold"
+          title="Export Customers to CSV"
+        >
+          <Download className="w-4 h-4" />
+          Export
+        </button>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-sm">
           <thead>
@@ -111,11 +122,7 @@ export function CustomersTab({
         </table>
       </div>
 
-      <Pagination 
-        currentPage={currentPage} 
-        totalPages={totalPages} 
-        onPageChange={setCurrentPage} 
-      />
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
 
       {/* User Activity Modal */}
       {selectedUser && (

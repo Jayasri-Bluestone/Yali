@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { API_URL } from '../../config';
-import { Landmark, ArrowUpRight, CheckCircle, XCircle } from 'lucide-react';
+import { Landmark, ArrowUpRight, CheckCircle, XCircle, Download } from 'lucide-react';
+import { exportToCSV } from '../../utils/csvExport';
 
 export function SettlementsTab({ isVendor, userData, token }) {
   const [bankDetails, setBankDetails] = useState({ bankAccountNumber: '', ifscCode: '', accountHolderName: '', bankName: '' });
@@ -165,7 +166,17 @@ export function SettlementsTab({ isVendor, userData, token }) {
 
         {/* History Table */}
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Payout History</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Payout History</h2>
+            <button
+              onClick={() => exportToCSV(payouts, 'my_payouts')}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] rounded-lg border border-gray-200 transition-colors text-sm font-semibold"
+              title="Export Payouts to CSV"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
@@ -206,7 +217,17 @@ export function SettlementsTab({ isVendor, userData, token }) {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Vendor Settlement Requests</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Vendor Settlement Requests</h2>
+          <button
+            onClick={() => exportToCSV(payouts, 'all_payouts')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] rounded-lg border border-gray-200 transition-colors text-sm font-semibold"
+            title="Export All Payouts to CSV"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>

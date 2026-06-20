@@ -39,10 +39,10 @@ export function VideosTab({
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
-  const totalPages = Math.ceil(filteredVideos.length / ITEMS_PER_PAGE);
-  const currentItems = filteredVideos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredVideos.length / itemsPerPage);
+  const currentItems = filteredVideos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const handleOpenAddModal = () => {
     setEditingVideo(null);
@@ -240,11 +240,7 @@ export function VideosTab({
         </table>
       </div>
 
-      <Pagination 
-        currentPage={currentPage} 
-        totalPages={totalPages} 
-        onPageChange={setCurrentPage} 
-      />
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
 
       {/* Add / Edit Modal */}
       {isModalOpen && (

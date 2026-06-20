@@ -1,4 +1,5 @@
-import { Tag, Building, Home, Bike, Car, Leaf, AlertTriangle, Plus, Edit, Trash2 } from 'lucide-react';
+import { Tag, Building, Home, Bike, Car, Leaf, AlertTriangle, Plus, Edit, Trash2, Download } from 'lucide-react';
+import { exportToCSV } from '../../utils/csvExport';
 import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
 import { Pagination } from './Pagination';
@@ -18,15 +19,15 @@ export function CategoriesTab({
   handleToggleStatus
 }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedCategoryTab]);
 
   const selectedProducts = selectedCategoryTab ? products.filter(p => p.category === selectedCategoryTab) : [];
-  const totalPages = Math.ceil(selectedProducts.length / ITEMS_PER_PAGE);
-  const currentItems = selectedProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(selectedProducts.length / itemsPerPage);
+  const currentItems = selectedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -153,26 +154,36 @@ export function CategoriesTab({
                 Reviewing and managing listings categorized under '{selectedCategoryTab}' separately.
               </p>
             </div>
-            <button
-              onClick={() => {
-                setEditingProduct(null);
-                setProductForm({
-                  name: '',
-                  price: '',
-                  originalPrice: '',
-                  category: selectedCategoryTab,
-                  image: '',
-                  stock: '',
-                  description: '',
-                  badge: ''
-                });
-                setIsProductModalOpen(true);
-              }}
-              className="px-4 py-2 bg-gradient-to-r from-purple-700 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2 text-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Add Product to {categoriesList.find(c => c.value === selectedCategoryTab)?.label}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => exportToCSV(selectedProducts, `category_${selectedCategoryTab}_products`)}
+                className="px-4 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] border border-gray-300 font-semibold rounded-lg transition-colors flex items-center gap-2 text-sm cursor-pointer"
+                title="Export Products to CSV"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+              <button
+                onClick={() => {
+                  setEditingProduct(null);
+                  setProductForm({
+                    name: '',
+                    price: '',
+                    originalPrice: '',
+                    category: selectedCategoryTab,
+                    image: '',
+                    stock: '',
+                    description: '',
+                    badge: ''
+                  });
+                  setIsProductModalOpen(true);
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-purple-700 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all flex items-center gap-2 text-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Add Product to {categoriesList.find(c => c.value === selectedCategoryTab)?.label}
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -247,11 +258,7 @@ export function CategoriesTab({
               </tbody>
             </table>
           </div>
-          <Pagination 
-            currentPage={currentPage} 
-            totalPages={totalPages} 
-            onPageChange={setCurrentPage} 
-          />
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
         </div>
       )}
     </div>

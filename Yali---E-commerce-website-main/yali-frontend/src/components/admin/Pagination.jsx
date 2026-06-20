@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export function Pagination({ currentPage, totalPages, onPageChange }) {
-  if (totalPages <= 1) return null;
+export function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, onItemsPerPageChange }) {
+  if (totalPages <= 1 && (!itemsPerPage || itemsPerPage === 10)) return null;
 
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6 mt-4 rounded-b-xl">
@@ -23,8 +23,24 @@ export function Pagination({ currentPage, totalPages, onPageChange }) {
       </div>
       <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm text-gray-700">
-            Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span>
+          <p className="text-sm text-gray-700 flex items-center gap-4">
+            <span>Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span></span>
+            {onItemsPerPageChange && (
+              <span className="flex items-center gap-2">
+                Rows per page:
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+                  className="border border-gray-300 rounded-md text-sm py-1 pl-2 pr-6 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={1000000}>All</option>
+                </select>
+              </span>
+            )}
           </p>
         </div>
         <div>

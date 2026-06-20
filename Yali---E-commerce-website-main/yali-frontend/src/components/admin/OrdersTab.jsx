@@ -1,7 +1,8 @@
 import { useState, useEffect, Fragment } from 'react';
 import { Pagination } from './Pagination';
 import { API_URL } from '../../config';
-import { ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { ChevronDown, ChevronUp, Package, Download } from 'lucide-react';
+import { exportToCSV } from '../../utils/csvExport';
 
 export function OrdersTab({
   filteredOrders,
@@ -14,7 +15,7 @@ export function OrdersTab({
   handleDeliveryDateUpdate
 }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
   const [expandedOrders, setExpandedOrders] = useState({});
 
@@ -29,8 +30,8 @@ export function OrdersTab({
     }));
   };
 
-  const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
-  const currentItems = filteredOrders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const currentItems = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   // Note: handleAssignOrder and handleOrderStatusChange (overall) are still available,
   // but we focus on item-level updates now.
@@ -42,7 +43,17 @@ export function OrdersTab({
 
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
-      <h2 className="text-xl font-bold text-gray-950">Store Order Assignments & Fulfillment Logs</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-950">Store Order Assignments & Fulfillment Logs</h2>
+        <button
+          onClick={() => exportToCSV(filteredOrders, 'orders')}
+          className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] rounded-lg border border-gray-200 transition-colors text-sm font-semibold"
+          title="Export Orders to CSV"
+        >
+          <Download className="w-4 h-4" />
+          Export
+        </button>
+      </div>
       
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-sm">
@@ -163,11 +174,7 @@ export function OrdersTab({
           </tbody>
         </table>
       </div>
-      <Pagination 
-        currentPage={currentPage} 
-        totalPages={totalPages} 
-        onPageChange={setCurrentPage} 
-      />
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
     </div>
   );
 }

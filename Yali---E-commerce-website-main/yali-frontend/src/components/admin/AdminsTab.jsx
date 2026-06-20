@@ -10,10 +10,10 @@ export function AdminsTab({
 }) {
   const admins = users.filter(u => u.role === 'admin');
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
-  const totalPages = Math.ceil(admins.length / ITEMS_PER_PAGE);
-  const currentItems = admins.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(admins.length / itemsPerPage);
+  const currentItems = admins.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
@@ -84,11 +84,7 @@ export function AdminsTab({
           </tbody>
         </table>
       </div>
-      <Pagination 
-        currentPage={currentPage} 
-        totalPages={totalPages} 
-        onPageChange={setCurrentPage} 
-      />
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
     </div>
   );
 }

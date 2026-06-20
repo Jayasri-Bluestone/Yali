@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
-import { Plus, X, Eye, EyeOff } from 'lucide-react';
+import { Plus, X, Eye, EyeOff, Download, Edit, Trash2 } from 'lucide-react';
+import { exportToCSV } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
 import { API_URL } from '../../config';
 import { Pagination } from './Pagination';
@@ -8,20 +9,21 @@ import { Pagination } from './Pagination';
 export function VendorsTab({
   users,
   handleToggleUserStatus,
-  refreshUsers,
-  token,
+  handleUserRoleChange,
   categoriesList = [],
-  handleUserRoleChange
+  refreshUsers,
+  token
 }) {
   const { showToast } = useToast();
   const vendors = users.filter(u => u.role === 'vendor');
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
-  const totalPages = Math.ceil(vendors.length / ITEMS_PER_PAGE);
-  const currentItems = vendors.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(vendors.length / itemsPerPage);
+  const currentItems = vendors.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const [isAdding, setIsAdding] = useState(false);
+  const [editingVendorId, setEditingVendorId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -33,25 +35,63 @@ export function VendorsTab({
   });
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleRegisterVendor = async (e) => {
+  const handleEditClick = (vendor) => {
+    setFormData({
+      name: vendor.name || '',
+      email: vendor.email || '',
+      phone: vendor.phone || '',
+      password: '', // Leave blank for edit, not updated here
+      companyName: vendor.vendorDetails?.companyName || '',
+      taxId: vendor.vendorDetails?.taxId || '',
+      storeDescription: vendor.vendorDetails?.storeDescription || ''
+    });
+    setEditingVendorId(vendor.id);
+    setIsAdding(true);
+  };
+
+  const handleDeleteVendor = async (vendorId) => {
+    if (!window.confirm('Are you sure you want to delete this vendor and their profile data?')) return;
+    try {
+      const res = await fetch(`${API_URL}/admin/vendors/${vendorId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete vendor');
+      showToast('Vendor deleted successfully', 'success');
+      if (refreshUsers) refreshUsers();
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  const handleSaveVendor = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/auth/register`, {
-        method: 'POST',
+      let url = `${API_URL}/auth/register`;
+      let method = 'POST';
+      let payload = { ...formData, role: 'vendor' };
+
+      if (editingVendorId) {
+        url = `${API_URL}/admin/vendors/${editingVendorId}`;
+        method = 'PUT';
+        payload = formData;
+      }
+
+      const res = await fetch(url, {
+        method,
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify({
-          ...formData,
-          role: 'vendor'
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to register vendor');
+      if (!res.ok) throw new Error(data.error || (editingVendorId ? 'Failed to update vendor' : 'Failed to register vendor'));
       
-      showToast('Vendor registered successfully!', 'success');
+      showToast(editingVendorId ? 'Vendor updated successfully!' : 'Vendor registered successfully!', 'success');
       setIsAdding(false);
+      setEditingVendorId(null);
       setFormData({
         name: '',
         email: '',
@@ -71,24 +111,38 @@ export function VendorsTab({
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-gray-950">Vendor Partners & Application Hub</h2>
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="flex items-center gap-2 bg-[#2874f0] hover:bg-[#0066cc] text-white px-4 py-2 rounded-lg font-bold transition-colors"
-        >
-          <Plus className="w-5 h-5" /> Add Vendor
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => exportToCSV(vendors, 'vendors')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] rounded-lg border border-gray-200 transition-colors text-sm font-semibold"
+            title="Export Vendors to CSV"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
+          <button 
+            onClick={() => {
+              setEditingVendorId(null);
+              setFormData({ name: '', email: '', phone: '', password: '', companyName: '', taxId: '', storeDescription: '' });
+              setIsAdding(true);
+            }}
+            className="flex items-center gap-2 bg-[#2874f0] hover:bg-[#0066cc] text-white px-4 py-2 rounded-lg font-bold transition-colors"
+          >
+            <Plus className="w-5 h-5" /> Add Vendor
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-gray-500 font-semibold bg-gray-50">
-              <th className="p-4 rounded-l-lg">Company Name</th>
-              <th className="p-4">Owner Contact</th>
-              <th className="p-4">Tax / GSTIN ID</th>
+              <th className="p-4 rounded-l-lg">Company Info</th>
+              <th className="p-4">Contact Person</th>
+              <th className="p-4">Tax ID / GSTIN</th>
               <th className="p-4">Store Description</th>
               <th className="p-4">Fulfillment Status</th>
-              <th className="p-4">Vendor Category Lock</th>
+              <th className="p-4">Authorized Category</th>
               <th className="p-4 text-right rounded-r-lg">Actions</th>
             </tr>
           </thead>
@@ -127,12 +181,20 @@ export function VendorsTab({
                   </select>
                 </td>
                 <td className="p-4 text-right">
-                  <ToggleSwitch 
-                    checked={u.status === 'active'}
-                    onChange={() => handleToggleUserStatus(u.id, u.status)}
-                    activeLabel="Approved"
-                    inactiveLabel="Disabled"
-                  />
+                  <div className="flex items-center justify-end gap-3">
+                    <ToggleSwitch 
+                      checked={u.status === 'active'}
+                      onChange={() => handleToggleUserStatus(u.id, u.status)}
+                      activeLabel=""
+                      inactiveLabel=""
+                    />
+                    <button onClick={() => handleEditClick(u)} className="text-[#2874f0] hover:text-[#0056b3] transition-colors" title="Edit Vendor">
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDeleteVendor(u.id)} className="text-red-500 hover:text-red-700 transition-colors" title="Delete Vendor">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -145,26 +207,22 @@ export function VendorsTab({
         </table>
       </div>
 
-      <Pagination 
-        currentPage={currentPage} 
-        totalPages={totalPages} 
-        onPageChange={setCurrentPage} 
-      />
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
 
       {isAdding && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h3 className="text-xl font-bold text-gray-900">Register New Vendor</h3>
+              <h3 className="text-xl font-bold text-gray-900">{editingVendorId ? 'Edit Vendor Details' : 'Register New Vendor'}</h3>
               <button 
-                onClick={() => setIsAdding(false)}
+                onClick={() => { setIsAdding(false); setEditingVendorId(null); }}
                 className="p-2 hover:bg-gray-200 rounded-full transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
             
-            <form onSubmit={handleRegisterVendor} className="p-6 overflow-y-auto">
+            <form onSubmit={handleSaveVendor} className="p-6 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <h4 className="font-bold text-gray-800 border-b pb-2">Owner Details</h4>
@@ -202,25 +260,27 @@ export function VendorsTab({
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Temporary Password</label>
-                    <div className="relative">
-                      <input 
-                        type={showPassword ? "text" : "password"}
-                        required
-                        className="w-full border border-gray-300 rounded-xl px-4 py-2 pr-10 focus:ring-2 focus:ring-[#2874f0] focus:border-transparent outline-none"
-                        value={formData.password}
-                        onChange={e => setFormData({...formData, password: e.target.value})}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                  {!editingVendorId && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Temporary Password</label>
+                      <div className="relative">
+                        <input 
+                          type={showPassword ? "text" : "password"}
+                          required
+                          className="w-full border border-gray-300 rounded-xl px-4 py-2 pr-10 focus:ring-2 focus:ring-[#2874f0] focus:border-transparent outline-none"
+                          value={formData.password}
+                          onChange={e => setFormData({...formData, password: e.target.value})}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -261,21 +321,21 @@ export function VendorsTab({
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100">
-                <button 
-                  type="button"
-                  onClick={() => setIsAdding(false)}
-                  className="px-6 py-2.5 rounded-xl font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl font-bold text-white bg-[#2874f0] hover:bg-[#0066cc] transition-colors shadow-md hover:shadow-lg"
-                >
-                  Register Vendor
-                </button>
-              </div>
+              <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 rounded-b-3xl">
+              <button 
+                type="button"
+                onClick={() => { setIsAdding(false); setEditingVendorId(null); }}
+                className="px-6 py-2 border border-gray-300 rounded-xl font-bold text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit"
+                className="px-6 py-2 bg-[#2874f0] hover:bg-[#0066cc] text-white rounded-xl font-bold transition-colors shadow-lg shadow-blue-500/30"
+              >
+                {editingVendorId ? 'Save Changes' : 'Register Vendor'}
+              </button>
+            </div>
             </form>
           </div>
         </div>

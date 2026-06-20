@@ -1,4 +1,5 @@
-import { Search, Upload, Plus, Edit, Trash2 } from 'lucide-react';
+import { Search, Upload, Plus, Edit, Trash2, Download } from 'lucide-react';
+import { exportToCSV } from '../../utils/csvExport';
 import { useState, useEffect } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
 import { Pagination } from './Pagination';
@@ -12,6 +13,7 @@ export function ProductsTab({
   categoriesList,
   isCategoryAdmin,
   adminCategory,
+  isVendor,
   handleImportCSV,
   handleExportCSV,
   setIsProductModalOpen,
@@ -22,7 +24,7 @@ export function ProductsTab({
   handleToggleStatus
 }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -32,8 +34,8 @@ export function ProductsTab({
     .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
     .filter(p => categoryFilter === 'all' || p.category === categoryFilter);
 
-  const totalPages = Math.ceil(filteredList.length / ITEMS_PER_PAGE);
-  const currentItems = filteredList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredList.length / itemsPerPage);
+  const currentItems = filteredList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
@@ -52,9 +54,16 @@ export function ProductsTab({
         </div>
 
         <div className="flex gap-2">
+          <button
+            onClick={() => exportToCSV(filteredList, 'products')}
+            className="px-4 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] border border-gray-300 font-semibold rounded-lg transition-colors flex items-center gap-2 cursor-pointer text-sm"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
           <label className="px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer text-sm">
             <Upload className="w-4 h-4" />
-            Import CSV
+            Import
             <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
           </label>
           <button
@@ -64,7 +73,7 @@ export function ProductsTab({
                 name: '',
                 price: '',
                 originalPrice: '',
-                category: isCategoryAdmin ? adminCategory : 'real-estate',
+                category: (isCategoryAdmin || (isVendor && adminCategory && adminCategory !== 'all')) ? adminCategory : (categoriesList[0]?.value || 'real-estate'),
                 image: '',
                 images: [],
                 stock: '',
@@ -89,6 +98,10 @@ export function ProductsTab({
         ].filter(tab => {
           if (isCategoryAdmin) {
             return tab.value === adminCategory;
+          }
+          if (isVendor && tab.value !== 'all') {
+            // Only show category tabs if the vendor actually has products in that category
+            return filteredProducts.some(p => p.category === tab.value);
           }
           return true;
         }).map(tab => {
@@ -178,11 +191,7 @@ export function ProductsTab({
         </table>
       </div>
 
-      <Pagination 
-        currentPage={currentPage} 
-        totalPages={totalPages} 
-        onPageChange={setCurrentPage} 
-      />
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
     </div>
   );
 }

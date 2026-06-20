@@ -12,7 +12,7 @@ export function ReportsTab({ userData, token }) {
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
-    vendorId: 'all',
+    vendorId: userData?.role === 'vendor' ? userData.id : 'all',
     category: 'all',
     status: 'all'
   });
@@ -113,7 +113,17 @@ export function ReportsTab({ userData, token }) {
         return;
       }
 
-      const headers = Object.keys(data[0]);
+      const headers = Object.keys(data[0]).filter(
+        k => {
+          const lowerK = k.toLowerCase();
+          return !lowerK.includes('image') && 
+                 !lowerK.includes('icon') && 
+                 !lowerK.includes('thumbnail') && 
+                 !lowerK.includes('picture') && 
+                 !lowerK.includes('photo') &&
+                 !lowerK.includes('banner');
+        }
+      );
 
       if (action === 'view') {
         setViewModal({

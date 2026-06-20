@@ -11,14 +11,14 @@ export function ReviewsTab() {
   const token = localStorage.getItem('yali_token');
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [reviews.length]);
 
-  const totalPages = Math.ceil(reviews.length / ITEMS_PER_PAGE);
-  const currentItems = reviews.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(reviews.length / itemsPerPage);
+  const currentItems = reviews.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const fetchReviews = async () => {
     setLoading(true);
@@ -165,11 +165,7 @@ export function ReviewsTab() {
           </tbody>
         </table>
       </div>
-      <Pagination 
-        currentPage={currentPage} 
-        totalPages={totalPages} 
-        onPageChange={setCurrentPage} 
-      />
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
     </div>
   );
 }

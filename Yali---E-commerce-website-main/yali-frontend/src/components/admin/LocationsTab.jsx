@@ -36,14 +36,14 @@ export function LocationsTab({ token }) {
   );
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  const totalPages = Math.ceil(filteredLocations.length / ITEMS_PER_PAGE);
-  const currentItems = filteredLocations.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredLocations.length / itemsPerPage);
+  const currentItems = filteredLocations.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading locations...</div>;
@@ -114,11 +114,7 @@ export function LocationsTab({ token }) {
             </tbody>
           </table>
         </div>
-        <Pagination 
-          currentPage={currentPage} 
-          totalPages={totalPages} 
-          onPageChange={setCurrentPage} 
-        />
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} itemsPerPage={itemsPerPage} onItemsPerPageChange={setItemsPerPage} />
       </div>
     </div>
   );
