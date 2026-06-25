@@ -38,7 +38,7 @@ export function WishlistPage({
               <p className="text-gray-500 mb-8 max-w-sm">Save items you like here to purchase them later.</p>
               <button
                 onClick={() => navigate('/')}
-                className="px-8 py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-bold hover:shadow-lg transition-all"
+                className="px-8 py-4 bg-[#1873e8] hover:bg-[#10b981] text-white rounded-xl font-bold shadow-sm hover:shadow-lg transition-all"
               >
                 Continue Shopping
               </button>

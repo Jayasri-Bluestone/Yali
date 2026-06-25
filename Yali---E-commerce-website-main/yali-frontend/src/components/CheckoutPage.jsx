@@ -12,6 +12,9 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [transactionHash, setTransactionHash] = useState('');
+  const [transactionScreenshot, setTransactionScreenshot] = useState('');
+  
   
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState(null);
@@ -131,6 +134,11 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
     }
     
     try {
+      if (paymentMethod === 'usdt' && (!transactionHash || !transactionScreenshot)) {
+        showToast('Please provide both Transaction Hash and Screenshot for USDT payments.', 'warning');
+        return;
+      }
+
       const fullAddress = `${shippingAddress.address}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}`;
       const response = await fetch(`${API_URL}/orders`, {
         method: 'POST',
@@ -167,7 +175,9 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
           shipping: shipping,
           discount: discount,
           total: total,
-          appliedCoupon: appliedCoupon
+          appliedCoupon: appliedCoupon,
+          transactionHash: paymentMethod === 'usdt' ? transactionHash : undefined,
+          transactionScreenshot: paymentMethod === 'usdt' ? transactionScreenshot : undefined
         })
       });
 
@@ -208,7 +218,7 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
     return (
       <>
         {/* Success Backdrop */}
-        <div className="min-h-screen bg-gray-50 z-[9999] flex items-center justify-center p-4">
+        <div className="min-h-[calc(100vh-200px)] w-full flex items-center justify-center p-4 py-12">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border border-emerald-100 text-center animate-scale-in relative overflow-hidden">
             {/* Background glowing gradients */}
             <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -244,13 +254,16 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
               </svg>
             </div>
 
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h3>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              {paymentMethod === 'usdt' ? 'Payment Under Verification' : 'Payment Successful!'}
+            </h3>
             <p className="text-gray-600 text-sm mb-6">
               Order ID: <span className="font-semibold text-[#0066cc]">#{placedOrderId}</span> has been placed.
+              {paymentMethod === 'usdt' && " It will be confirmed once your USDT transfer is verified by our admins."}
             </p>
 
             {/* Reward Card */}
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 mb-6 animate-pulse-glow">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 animate-pulse-glow">
               <div className="flex items-center gap-3 justify-center text-amber-700">
                 <span className="text-2xl">🎁</span>
                 <div className="text-left">
@@ -279,7 +292,7 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                 });
                 navigate('/');
               }}
-              className="w-full py-3 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow cursor-pointer"
+              className="w-full py-3 bg-[#1873e8] hover:bg-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow cursor-pointer"
             >
               View Invoice & Receipt
             </button>
@@ -792,6 +805,89 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                           </div>
                         </label>
                       </div>
+
+                      {/* USDT Crypto Transfer */}
+                      <div className={`transition-colors ${paymentMethod === 'usdt' ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                        <label className="flex items-start gap-3 p-4 cursor-pointer">
+                          <input 
+                            type="radio" 
+                            name="payment" 
+                            checked={paymentMethod === 'usdt'} 
+                            onChange={() => setPaymentMethod('usdt')}
+                            className="mt-1 w-4 h-4 text-[#0066cc] border-gray-300 focus:ring-[#0066cc]"
+                          />
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900 flex items-center gap-2">
+                              <div className="text-lg leading-none w-5 text-center">🪙</div>
+                              USDT Crypto Transfer
+                            </div>
+                            {paymentMethod === 'usdt' && (
+                              <div className="mt-4 bg-white border border-blue-100 rounded-xl p-5 shadow-sm space-y-4">
+                                <div className="bg-emerald-50 text-emerald-800 p-3 rounded-lg text-sm border border-emerald-100">
+                                  <p className="font-bold mb-1">Send your USDT payment to the address below:</p>
+                                  <p className="font-mono bg-white px-2 py-1 rounded border border-emerald-200 break-all select-all">
+                                    {import.meta.env.VITE_USDT_WALLET_ADDRESS || '0xPlaceholderAddressForUSDTWallet'}
+                                  </p>
+                                  <p className="mt-2 text-xs">Network: TRC20 / ERC20 (Verify with admin)</p>
+                                </div>
+                                
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Transaction Hash (TxID) *</label>
+                                  <input
+                                    type="text"
+                                    value={transactionHash}
+                                    onChange={(e) => setTransactionHash(e.target.value)}
+                                    className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                                    placeholder="e.g. 0x123abc..."
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">Transaction Screenshot *</label>
+                                  {transactionScreenshot ? (
+                                    <div className="relative inline-block mt-1">
+                                      <img src={transactionScreenshot} alt="Screenshot" className="h-24 w-auto rounded border border-gray-200" />
+                                      <button 
+                                        type="button" 
+                                        onClick={() => setTransactionScreenshot('')}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={async (e) => {
+                                        const file = e.target.files[0];
+                                        if (!file) return;
+                                        const formData = new FormData();
+                                        formData.append('file', file);
+                                        try {
+                                          showToast('Uploading screenshot...', 'info');
+                                          const res = await fetch(`${API_URL}/upload`, {
+                                            method: 'POST',
+                                            headers: { 'Authorization': `Bearer ${token}` },
+                                            body: formData
+                                          });
+                                          const data = await res.json();
+                                          if (!res.ok) throw new Error(data.error || 'Upload failed');
+                                          setTransactionScreenshot(data.url);
+                                          showToast('Screenshot uploaded successfully', 'success');
+                                        } catch (err) {
+                                          showToast(err.message, 'error');
+                                        }
+                                      }}
+                                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -972,7 +1068,7 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                   {step === 'address' && (
                     <button
                       onClick={() => setStep('payment')}
-                      className="w-full py-3 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow"
+                      className="w-full py-3 bg-[#1873e8] hover:bg-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow"
                       disabled={!shippingAddress.name || !shippingAddress.phone || !shippingAddress.address}
                     >
                       Continue to Payment
@@ -982,7 +1078,7 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                     <>
                       <button
                         onClick={() => setStep('review')}
-                        className="w-full py-3 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow"
+                        className="w-full py-3 bg-[#1873e8] hover:bg-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow"
                       >
                         Review Order
                       </button>
@@ -998,7 +1094,7 @@ export function CheckoutPage({ items, onPaymentSuccess, coupons = [], token, use
                     <>
                       <button
                         onClick={handlePlaceOrder}
-                        className="w-full py-3 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-[#10b981] hover:opacity-90 text-white rounded-xl font-semibold shadow-sm hover:shadow-xl transition-all flex items-center justify-center gap-2"
                       >
                         <Lock className="w-5 h-5" />
                         Place Order

@@ -72,7 +72,7 @@ export function CartPage({
             </button>
             <ShoppingBag className="w-8 h-8 text-[#0066cc]" />
             <h1 className="text-3xl font-black text-gray-900">Your Cart</h1>
-            <span className="bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white px-3 py-1 rounded-full text-sm font-semibold">
+            <span className="bg-[#10b981] text-white px-3 py-1 rounded-full text-sm font-semibold">
               {activeItems.length} Items
             </span>
           </div>
@@ -87,7 +87,7 @@ export function CartPage({
               <p className="text-gray-500 mb-8 max-w-sm">There is nothing in your cart. Let's add some items.</p>
               <button
                 onClick={() => navigate('/')}
-                className="px-8 py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-bold hover:shadow-lg transition-all cursor-pointer"
+                className="px-8 py-4 bg-[#1873e8] hover:opacity-90 text-white rounded-xl font-bold shadow-sm hover:shadow-lg transition-all cursor-pointer"
               >
                 Start Shopping
               </button>
@@ -183,7 +183,7 @@ export function CartPage({
                 
                 <button
                   onClick={() => onProceedToCheckout(activeItems)}
-                  className="w-full py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-black text-lg hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer">
+                  className="w-full py-4 bg-[#10b981] hover:opacity-90 text-white rounded-xl font-black text-lg shadow-sm hover:shadow-xl transition-all cursor-pointer">
                   Proceed to Checkout
                 </button>
                 <button

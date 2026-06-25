@@ -194,6 +194,50 @@ const PAGE_DATA = {
       </div>
     )
   },
+  'sell': {
+    title: 'List Your Property',
+    icon: Briefcase,
+    content: (
+      <div className="space-y-6 text-gray-700">
+        <h3 className="text-2xl font-bold text-gray-900">Sell or Rent Your Property Fast</h3>
+        <p>Get maximum visibility for your residential, commercial, or agricultural properties by listing them on our premium platform.</p>
+        <button onClick={() => alert("Vendor Registration Flow")} className="px-6 py-3 bg-[#0066cc] text-white font-bold rounded-xl hover:shadow-lg transition-shadow">
+          Start Listing Now
+        </button>
+      </div>
+    )
+  },
+  'sell-vehicle': {
+    title: 'Sell Your Vehicle',
+    icon: Truck,
+    content: (
+      <div className="space-y-6 text-gray-700">
+        <h3 className="text-2xl font-bold text-gray-900">Get the Best Price for Your Vehicle</h3>
+        <p>Connect with verified buyers looking for two-wheelers and four-wheelers. Hassle-free selling process with instant valuation.</p>
+        <button onClick={() => alert("Vehicle Selling Flow")} className="px-6 py-3 bg-[#0066cc] text-white font-bold rounded-xl hover:shadow-lg transition-shadow">
+          Sell Vehicle
+        </button>
+      </div>
+    )
+  },
+  'services': {
+    title: 'Value Added Services',
+    icon: FileText,
+    content: (
+      <div className="space-y-6 text-gray-700">
+        <h3 className="text-2xl font-bold text-gray-900">Professional Assistance & Consulting</h3>
+        <p>Need help with documentation, legal verification, or property consulting? Our expert partners are here to assist you.</p>
+        <ul className="list-disc pl-5 space-y-2 mt-4">
+          <li><strong>Legal & Documentation:</strong> Hassle-free property registration and verification.</li>
+          <li><strong>Home Loans:</strong> Connect with top banks for the best interest rates.</li>
+          <li><strong>Interiors:</strong> Professional interior design and execution.</li>
+        </ul>
+        <button onClick={() => alert("Services Flow")} className="px-6 py-3 bg-[#0066cc] text-white font-bold rounded-xl hover:shadow-lg transition-shadow mt-4">
+          Request Service
+        </button>
+      </div>
+    )
+  },
   'privacy-policy': {
     title: 'Privacy Policy',
     icon: ShieldCheck,
@@ -336,7 +380,7 @@ export function StaticPage() {
         </Link>
         
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-8 sm:p-12 text-white">
+          <div className="bg-gray-900 p-8 sm:p-12 text-white">
             <div className="flex items-center gap-4 mb-2">
               <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
                 <Icon className="w-8 h-8" />

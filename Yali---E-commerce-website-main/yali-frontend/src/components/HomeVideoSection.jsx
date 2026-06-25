@@ -142,7 +142,7 @@ export function VideoCard({ video, onCategoryClick }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
         {/* Top category pill */}
-        <div className={`absolute top-3 right-3 bg-gradient-to-r ${categoryGradient} px-2.5 py-0.5 rounded-full transition-opacity duration-300 ${(isHovered || !isMuted) ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`absolute top-3 right-3 bg-[#1873e8] px-2.5 py-0.5 rounded-full transition-opacity duration-300 ${(isHovered || !isMuted) ? 'opacity-0' : 'opacity-100'}`}>
           <span className="text-white text-[9px] font-black uppercase tracking-wider">
             {video.category?.replace(/-/g, ' ')}
           </span>
@@ -194,7 +194,7 @@ export function HomeVideoSection({ videos: backendVideos = [], onCategoryClick }
       {/* Section Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-orange-400 rounded-lg flex items-center justify-center shadow-md">
+          <div className="w-8 h-8 bg-[#10b981] rounded-lg flex items-center justify-center shadow-md">
             <Play className="w-4 h-4 text-white fill-white" />
           </div>
           <div>

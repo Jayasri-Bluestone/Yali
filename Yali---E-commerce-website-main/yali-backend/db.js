@@ -20,7 +20,19 @@ async function initDB() {
     connection = await pool.getConnection();
     console.log('Connected to MySQL Hostinger Database successfully!');
 
-    // 1. Create Users Table
+    // 1. Create Roles Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS roles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        description TEXT,
+        permissions JSON NULL,
+        is_system BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 1.5 Create Users Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -29,12 +41,20 @@ async function initDB() {
         phone VARCHAR(50),
         password VARCHAR(255) NOT NULL,
         wallet DECIMAL(10,2) DEFAULT 0.00,
-        role ENUM('customer', 'admin', 'vendor') DEFAULT 'customer',
+        role VARCHAR(50) DEFAULT 'customer',
+        department VARCHAR(100) NULL,
         status ENUM('active', 'disabled', 'pending_approval') DEFAULT 'active',
         managed_category VARCHAR(100) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    try {
+      await connection.query("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) DEFAULT 'customer'");
+      await connection.query("ALTER TABLE users ADD COLUMN department VARCHAR(100) NULL");
+    } catch(e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not modify role or add department to users:', e.message);
+    }
 
     // 2. Create Vendor Details Table
     await connection.query(`
@@ -78,6 +98,36 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    try {
+      await connection.query("ALTER TABLE categories ADD COLUMN image_url VARCHAR(500) NULL");
+      await connection.query("ALTER TABLE categories ADD COLUMN bg_color VARCHAR(20) NULL");
+    } catch(e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not alter categories:', e.message);
+    }
+
+    try {
+      await connection.query("ALTER TABLE sub_categories ADD COLUMN subtitle VARCHAR(255) NULL");
+      await connection.query("ALTER TABLE sub_categories ADD COLUMN icon_name VARCHAR(50) NULL");
+      await connection.query("ALTER TABLE sub_categories ADD COLUMN link_url VARCHAR(500) NULL");
+    } catch(e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not alter sub_categories:', e.message);
+    }
+
+    // 4.3.2 Create Home Features Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS home_features (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        icon_name VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description VARCHAR(500) NOT NULL,
+        color_hex VARCHAR(20) NOT NULL,
+        display_order INT DEFAULT 0,
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+
     // 3. Create Products Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS products (
@@ -117,7 +167,7 @@ async function initDB() {
         shipping DECIMAL(10,2) NOT NULL,
         discount DECIMAL(10,2) NOT NULL,
         total DECIMAL(10,2) NOT NULL,
-        status ENUM('Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Returned') DEFAULT 'Pending',
+        status ENUM('Pending', 'Pending Payment Verification', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Returned') DEFAULT 'Pending',
         tracking_number VARCHAR(100) DEFAULT '',
         tracking_link VARCHAR(500) NULL,
         delivery_partner VARCHAR(255) NULL,
@@ -125,6 +175,8 @@ async function initDB() {
         category VARCHAR(100) NULL,
         expected_delivery_date DATE NULL,
         order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        transaction_hash VARCHAR(255) NULL,
+        transaction_screenshot MEDIUMTEXT NULL,
         FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (assigned_vendor_id) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -135,6 +187,35 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS delivery_partners (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
+        phone VARCHAR(50) NULL,
+        email VARCHAR(255) NULL,
+        vehicle_type VARCHAR(50) NULL,
+        vehicle_number VARCHAR(100) NULL,
+        status ENUM('active', 'offline', 'suspended', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // Safely add missing columns to delivery_partners if they don't exist
+    try {
+      await connection.query("ALTER TABLE delivery_partners ADD COLUMN phone VARCHAR(50) NULL");
+      await connection.query("ALTER TABLE delivery_partners ADD COLUMN email VARCHAR(255) NULL");
+      await connection.query("ALTER TABLE delivery_partners ADD COLUMN vehicle_type VARCHAR(50) NULL");
+      await connection.query("ALTER TABLE delivery_partners ADD COLUMN vehicle_number VARCHAR(100) NULL");
+      // Since enum might not have offline/suspended, let's modify the column type
+      await connection.query("ALTER TABLE delivery_partners MODIFY COLUMN status ENUM('active', 'offline', 'suspended', 'inactive') DEFAULT 'active'");
+    } catch(e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not alter delivery_partners:', e.message);
+    }
+
+    // 4.5.1 Create Shipping Rules Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS shipping_rules (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        zone_name VARCHAR(255) NOT NULL,
+        base_cost DECIMAL(10,2) DEFAULT 0.00,
+        per_kg_cost DECIMAL(10,2) DEFAULT 0.00,
+        estimated_days VARCHAR(100) NULL,
         status ENUM('active', 'inactive') DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -228,6 +309,21 @@ async function initDB() {
       if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add unique_id to products:', e.message);
     }
     try {
+      await connection.query("ALTER TABLE products ADD COLUMN sub_category VARCHAR(100) NULL");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add sub_category to products:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE products ADD COLUMN metadata JSON NULL");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.error('Error adding metadata column:', e);
+    }
+    try {
+      await connection.query("ALTER TABLE products ADD COLUMN cta_action VARCHAR(50) DEFAULT 'buy_now'");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.error('Error adding cta_action column:', e);
+    }
+    try {
       await connection.query("ALTER TABLE products MODIFY COLUMN image MEDIUMTEXT");
       await connection.query("ALTER TABLE products MODIFY COLUMN images MEDIUMTEXT");
       await connection.query("ALTER TABLE order_items MODIFY COLUMN image MEDIUMTEXT");
@@ -251,7 +347,14 @@ async function initDB() {
     }
 
     try {
-      await connection.query("ALTER TABLE orders MODIFY COLUMN status ENUM('Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Return Requested', 'Returned') DEFAULT 'Pending'");
+      await connection.query("ALTER TABLE orders ADD COLUMN transaction_hash VARCHAR(255) NULL");
+      await connection.query("ALTER TABLE orders ADD COLUMN transaction_screenshot MEDIUMTEXT NULL");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add USDT columns to orders:', e.message);
+    }
+
+    try {
+      await connection.query("ALTER TABLE orders MODIFY COLUMN status ENUM('Pending', 'Pending Payment Verification', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Return Requested', 'Returned') DEFAULT 'Pending'");
     } catch (e) {
       console.warn('Could not modify status enum in orders:', e.message);
     }
@@ -283,7 +386,13 @@ async function initDB() {
     try {
       await connection.query("ALTER TABLE order_items ADD COLUMN variant_desc VARCHAR(255) NULL");
     } catch (e) {
-      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add return_policy to products:', e.message);
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add variant_desc to order_items:', e.message);
+    }
+    try {
+      await connection.query("ALTER TABLE order_items ADD COLUMN tracking_link VARCHAR(500) NULL");
+      await connection.query("ALTER TABLE order_items ADD COLUMN delivery_partner VARCHAR(255) NULL");
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not add delivery columns to order_items:', e.message);
     }
     try {
       await connection.query("ALTER TABLE products ADD COLUMN delivery_days INT DEFAULT 3");
@@ -356,10 +465,22 @@ async function initDB() {
         type ENUM('credit', 'debit') NOT NULL,
         amount DECIMAL(10,2) NOT NULL,
         description VARCHAR(255),
+        status ENUM('completed', 'pending', 'rejected') DEFAULT 'completed',
+        transaction_hash VARCHAR(255) NULL,
+        transaction_screenshot MEDIUMTEXT NULL,
         date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // Ensure status, transaction_hash, transaction_screenshot exist
+    try {
+      await connection.query("ALTER TABLE wallet_transactions ADD COLUMN status ENUM('completed', 'pending', 'rejected') DEFAULT 'completed'");
+      await connection.query("ALTER TABLE wallet_transactions ADD COLUMN transaction_hash VARCHAR(255) NULL");
+      await connection.query("ALTER TABLE wallet_transactions ADD COLUMN transaction_screenshot MEDIUMTEXT NULL");
+    } catch (e) {
+      // Columns likely exist, ignore error
+    }
 
     // 9. Create Videos Table
     await connection.query(`
@@ -508,6 +629,29 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 16. Create Enquiries Table (for property/vehicle visit, testdrive, general enquiries)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS enquiries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NULL,
+        product_name VARCHAR(255) NULL,
+        category VARCHAR(100) NULL,
+        sub_category VARCHAR(100) NULL,
+        enquiry_type VARCHAR(50) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NULL,
+        phone VARCHAR(50) NULL,
+        preferred_date DATE NULL,
+        message TEXT NULL,
+        user_id INT NULL,
+        vendor_id INT NULL,
+        status ENUM('new','contacted','closed') DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     console.log('Tables verified/created successfully.');
 
     // Seed data if empty
@@ -542,6 +686,19 @@ async function initDB() {
 }
 
 async function seedData(connection) {
+  // Check if roles table is empty
+  const [roleCount] = await connection.query('SELECT COUNT(*) as count FROM roles');
+  if (roleCount[0].count === 0) {
+    console.log('Seeding default roles...');
+    await connection.query(`
+      INSERT INTO roles (name, description, permissions, is_system) VALUES
+      ('Super Admin', 'Full access to all modules and system settings.', '{"dashboard":true,"users":true,"products":true,"settings":true,"reports":true}', TRUE),
+      ('Automobile Manager', 'Can manage all cars, bikes, and dealers.', '{"dashboard":true,"users":false,"products":true,"settings":false,"reports":true}', FALSE),
+      ('Real Estate Agent', 'Access to residential and commercial listings.', '{"dashboard":true,"users":false,"products":true,"settings":false,"reports":false}', FALSE),
+      ('Customer Support', 'Can view orders, users, and handle tickets.', '{"dashboard":true,"users":true,"products":false,"settings":false,"reports":false}', FALSE);
+    `);
+  }
+
   // Check if users table is empty
   const [userCount] = await connection.query('SELECT COUNT(*) as count FROM users');
   if (userCount[0].count === 0) {
@@ -552,13 +709,13 @@ async function seedData(connection) {
 
     // Insert Users
     await connection.query(`
-      INSERT INTO users (name, email, phone, password, wallet, role, status, managed_category) VALUES
-      ('John Doe', 'john@example.com', '+1 (555) 123-4567', ?, 150.00, 'customer', 'active', NULL),
-      ('Alice Smith', 'alice@example.com', '+1 (555) 987-6543', ?, 0.00, 'customer', 'active', NULL),
-      ('Admin User', 'admin@yali.com', '+1 (555) 000-1111', ?, 1000.00, 'admin', 'active', NULL),
-      ('Real Estate Manager', 'admin_re@yali.com', '+1 (555) 222-3333', ?, 500.00, 'admin', 'active', 'real-estate'),
-      ('Groceries Manager', 'admin_groceries@yali.com', '+1 (555) 444-5555', ?, 500.00, 'admin', 'active', 'organic-groceries'),
-      ('YALI Properties Vendor', 'vendor@yali.com', '+1 (555) 999-8888', ?, 0.00, 'vendor', 'active', NULL);
+      INSERT INTO users (name, email, phone, password, wallet, role, department, status, managed_category) VALUES
+      ('John Doe', 'john@example.com', '+1 (555) 123-4567', ?, 150.00, 'customer', NULL, 'active', NULL),
+      ('Alice Smith', 'alice@example.com', '+1 (555) 987-6543', ?, 0.00, 'customer', NULL, 'active', NULL),
+      ('Admin User', 'admin@yali.com', '+1 (555) 000-1111', ?, 1000.00, 'Super Admin', 'Management', 'active', NULL),
+      ('Real Estate Manager', 'admin_re@yali.com', '+1 (555) 222-3333', ?, 500.00, 'Real Estate Agent', 'Real Estate', 'active', 'real-estate'),
+      ('Groceries Manager', 'admin_groceries@yali.com', '+1 (555) 444-5555', ?, 500.00, 'Super Admin', 'Operations', 'active', 'organic-groceries'),
+      ('YALI Properties Vendor', 'vendor@yali.com', '+1 (555) 999-8888', ?, 0.00, 'vendor', NULL, 'active', NULL);
     `, [hashedCustPass, hashedCustPass, hashedAdminPass, hashedAdminPass, hashedAdminPass, hashedVendorPass]);
 
     // Insert Vendor details for vendor user (ID is 6 in auto-increment if started from 1)
@@ -739,9 +896,11 @@ async function seedData(connection) {
     console.log('Seeding default banners...');
     await connection.query(`
       INSERT INTO banners (title, subtitle, cta, discount, bg_image, gradient, category) VALUES
-      ('Dream Properties', 'Premium Land & Apartments - Up to 30% OFF', 'Explore Now', '30% OFF', 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&h=400&fit=crop', 'from-[#0066cc]/80 to-[#0099ff]/80', 'real-estate'),
-      ('Organic & Fresh', 'Pure Turmeric, Jaggery & Farm Products - Special Discount', 'Shop Organic', '25% OFF', 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=1200&h=400&fit=crop', 'from-[#10b981]/80 to-[#22d3ee]/80', 'organic-groceries'),
-      ('Auto Accessories', 'Premium Bike & Car Accessories - Limited Time Offer', 'Grab Deals', '40% OFF', 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=1200&h=400&fit=crop', 'from-[#22d3ee]/80 to-[#0066cc]/80', NULL);
+      ('Dream Real Estate', 'Premium Land & Eco-Villas - Up to 30% OFF', 'Explore Now', '30% OFF', 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&h=400&fit=crop', 'from-[#1873e8] to-[#10b981]', 'real-estate'),
+      ('Modern Properties', 'Luxury City Apartments & Commercial Spaces', 'View Listings', 'New', 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1200&h=400&fit=crop', 'from-[#10b981] to-[#1873e8]', 'properties'),
+      ('Pro Bike Gear', 'Helmets, Bags & Maintenance Tools - 20% OFF', 'Ride Safe', '20% OFF', 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=1200&h=400&fit=crop', 'from-[#1873e8] to-[#10b981]', 'bike-accessories'),
+      ('Premium Auto Upgrades', 'Seat Cushions, Mats & Care Essentials - 40% OFF', 'Grab Deals', '40% OFF', 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=1200&h=400&fit=crop', 'from-[#10b981] to-[#1873e8]', 'car-accessories'),
+      ('Organic & Fresh', 'Pure Turmeric, Jaggery & Farm Products', 'Shop Organic', '25% OFF', 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=1200&h=400&fit=crop', 'from-[#1873e8] to-[#10b981]', 'organic-groceries');
     `);
   }
 

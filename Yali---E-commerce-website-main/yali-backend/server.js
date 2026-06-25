@@ -91,6 +91,13 @@ function authenticateToken(req, res, next) {
       console.error('[AUTH] Token error:', err.message);
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
+
+    // Normalize role for legacy endpoint checks (treat custom internal roles as 'admin')
+    if (user.role && user.role !== 'customer' && user.role !== 'vendor') {
+      user.original_role = user.role;
+      user.role = 'admin';
+    }
+
     req.user = user;
     next();
   });
@@ -107,7 +114,11 @@ app.post('/yali_api/upload', authenticateToken, upload.single('file'), (req, res
   }
 
   const subDir = req.file.mimetype.startsWith('video') ? 'videos' : 'images';
-  const fileUrl = `http://localhost:${PORT}/uploads/${subDir}/${req.file.filename}`;
+  
+  // Use the request's host so the URL works in both local dev and production
+  const host = req.get('host'); // e.g. "localhost:5010" or "bluestoneinternationalpreschool.com"
+  const protocol = req.protocol || 'http';
+  const fileUrl = `${protocol}://${host}/uploads/${subDir}/${req.file.filename}`;
 
   res.json({
     message: 'File uploaded successfully',
@@ -141,7 +152,7 @@ app.post('/yali_api/auth/register', async (req, res) => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     // Check if user already exists
     const [existing] = await connection.query('SELECT id FROM users WHERE email = ?', [email]);
     if (existing.length > 0) {
@@ -171,9 +182,9 @@ app.post('/yali_api/auth/register', async (req, res) => {
     }
 
     await connection.commit();
-    res.status(201).json({ 
+    res.status(201).json({
       message: role === 'vendor' ? 'Registration pending admin approval.' : 'Registration successful.',
-      userId 
+      userId
     });
 
   } catch (error) {
@@ -216,12 +227,12 @@ app.post('/yali_api/auth/login', async (req, res) => {
 
     // Generate Token
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        name: user.name, 
-        email: user.email, 
-        role: user.role, 
-        managed_category: user.managed_category 
+      {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        managed_category: user.managed_category
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -336,12 +347,12 @@ app.post('/yali_api/auth/verify-otp', async (req, res) => {
 
     // Generate Token
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        name: user.name, 
-        email: user.email, 
-        role: user.role, 
-        managed_category: user.managed_category 
+      {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        managed_category: user.managed_category
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -379,7 +390,7 @@ app.post('/yali_api/auth/google', async (req, res) => {
     const response = await axios.get(`https://www.googleapis.com/oauth2/v3/userinfo`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
-    
+
     const { email, name } = response.data;
     if (!email) return res.status(400).json({ error: 'Email is required from Google' });
 
@@ -432,7 +443,7 @@ app.post('/yali_api/auth/facebook', async (req, res) => {
     // Verify token with Facebook Graph API
     const response = await axios.get(`https://graph.facebook.com/me?fields=id,name,email&access_token=${accessToken}`);
     const { email, name } = response.data;
-    
+
     if (!email) return res.status(400).json({ error: 'Email is required from Facebook' });
 
     // Check if user exists
@@ -528,13 +539,28 @@ app.get('/yali_api/categories', async (req, res) => {
 // Create Category
 app.post('/yali_api/categories', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
-  const { value, label, icon, color_gradient } = req.body;
+  const { value, label, icon, color_gradient, image_url, bg_color } = req.body;
   try {
     await pool.query(
-      'INSERT INTO categories (value, label, icon, color_gradient) VALUES (?, ?, ?, ?)',
-      [value, label, icon || 'Tag', color_gradient || 'from-gray-500 to-gray-600']
+      'INSERT INTO categories (value, label, icon, color_gradient, image_url, bg_color) VALUES (?, ?, ?, ?, ?, ?)',
+      [value, label, icon || 'Tag', color_gradient || 'from-gray-500 to-gray-600', image_url || '', bg_color || '#083366']
     );
     res.status(201).json({ message: 'Category created' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update Category
+app.put('/yali_api/admin/categories/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { value, label, icon, color_gradient, image_url, bg_color, status } = req.body;
+  try {
+    await pool.query(
+      'UPDATE categories SET value = ?, label = ?, icon = ?, color_gradient = ?, image_url = ?, bg_color = ?, status = ? WHERE id = ?',
+      [value, label, icon || 'Tag', color_gradient || 'from-gray-500 to-gray-600', image_url || '', bg_color || '#083366', status || 'active', req.params.id]
+    );
+    res.json({ message: 'Category updated' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -565,11 +591,11 @@ app.get('/yali_api/sub-categories', async (req, res) => {
 
 app.post('/yali_api/admin/sub-categories', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
-  const { category_value, label, emoji, image_url, filter_tag, display_order, status } = req.body;
+  const { category_value, label, emoji, image_url, filter_tag, display_order, status, subtitle, icon_name, link_url } = req.body;
   try {
     await pool.query(
-      'INSERT INTO sub_categories (category_value, label, emoji, image_url, filter_tag, display_order, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [category_value, label, emoji || '', image_url || '', filter_tag, display_order || 0, status || 'active']
+      'INSERT INTO sub_categories (category_value, label, emoji, image_url, filter_tag, display_order, status, subtitle, icon_name, link_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [category_value, label, emoji || '', image_url || '', filter_tag, display_order || 0, status || 'active', subtitle || '', icon_name || 'Tag', link_url || '']
     );
     res.status(201).json({ message: 'Sub-Category created' });
   } catch (error) {
@@ -579,13 +605,63 @@ app.post('/yali_api/admin/sub-categories', authenticateToken, async (req, res) =
 
 app.put('/yali_api/admin/sub-categories/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
-  const { category_value, label, emoji, image_url, filter_tag, display_order, status } = req.body;
+  const { category_value, label, emoji, image_url, filter_tag, display_order, status, subtitle, icon_name, link_url } = req.body;
   try {
     await pool.query(
-      'UPDATE sub_categories SET category_value = ?, label = ?, emoji = ?, image_url = ?, filter_tag = ?, display_order = ?, status = ? WHERE id = ?',
-      [category_value, label, emoji || '', image_url || '', filter_tag, display_order || 0, status || 'active', req.params.id]
+      'UPDATE sub_categories SET category_value = ?, label = ?, emoji = ?, image_url = ?, filter_tag = ?, display_order = ?, status = ?, subtitle = ?, icon_name = ?, link_url = ? WHERE id = ?',
+      [category_value, label, emoji || '', image_url || '', filter_tag, display_order || 0, status || 'active', subtitle || '', icon_name || 'Tag', link_url || '', req.params.id]
     );
     res.json({ message: 'Sub-Category updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// HOME FEATURES ROUTES
+// -------------------------------------------------------------
+app.get('/yali_api/home-features', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM home_features WHERE status = "active" ORDER BY display_order ASC, id ASC');
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/yali_api/admin/home-features', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { icon_name, title, description, color_hex, display_order, status } = req.body;
+  try {
+    await pool.query(
+      'INSERT INTO home_features (icon_name, title, description, color_hex, display_order, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [icon_name || 'Star', title, description, color_hex || '#083366', display_order || 0, status || 'active']
+    );
+    res.status(201).json({ message: 'Feature created' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/yali_api/admin/home-features/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { icon_name, title, description, color_hex, display_order, status } = req.body;
+  try {
+    await pool.query(
+      'UPDATE home_features SET icon_name = ?, title = ?, description = ?, color_hex = ?, display_order = ?, status = ? WHERE id = ?',
+      [icon_name || 'Star', title, description, color_hex || '#083366', display_order || 0, status || 'active', req.params.id]
+    );
+    res.json({ message: 'Feature updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/yali_api/admin/home-features/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    await pool.query('DELETE FROM home_features WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Feature deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -607,8 +683,8 @@ app.delete('/yali_api/admin/sub-categories/:id', authenticateToken, async (req, 
 
 // Fetch all products
 app.get('/yali_api/products', async (req, res) => {
-  const { category, q, vendor_id, all } = req.query;
-  
+  const { category, sub_category, q, vendor_id, all } = req.query;
+
   let sql = 'SELECT * FROM products WHERE 1=1';
   const params = [];
 
@@ -619,6 +695,11 @@ app.get('/yali_api/products', async (req, res) => {
   if (category && category !== 'all') {
     sql += ' AND category = ?';
     params.push(category);
+  }
+
+  if (sub_category) {
+    sql += ' AND sub_category = ?';
+    params.push(sub_category);
   }
 
   if (vendor_id) {
@@ -637,6 +718,8 @@ app.get('/yali_api/products', async (req, res) => {
     const [rows] = await pool.query(sql, params);
     const parsedRows = rows.map(r => ({
       ...r,
+      images: r.images ? (typeof r.images === 'string' ? JSON.parse(r.images) : r.images) : [],
+      metadata: r.metadata ? (typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata) : {},
       price: parseFloat(r.price),
       originalPrice: r.original_price ? parseFloat(r.original_price) : null,
       rating: parseFloat(r.rating),
@@ -672,12 +755,14 @@ app.get('/yali_api/products/:id', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM products WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Product not found' });
-    
+
     const p = rows[0];
     const [variants] = await pool.query('SELECT * FROM product_variants WHERE product_id = ?', [p.id]);
-    
+
     res.json({
       ...p,
+      images: p.images ? (typeof p.images === 'string' ? JSON.parse(p.images) : p.images) : [],
+      metadata: p.metadata ? (typeof p.metadata === 'string' ? JSON.parse(p.metadata) : p.metadata) : {},
       price: parseFloat(p.price),
       originalPrice: p.original_price ? parseFloat(p.original_price) : null,
       rating: parseFloat(p.rating),
@@ -700,7 +785,7 @@ app.post('/yali_api/products', authenticateToken, async (req, res) => {
     return res.status(403).json({ error: 'Unauthorized access' });
   }
 
-  const { name, description, price, originalPrice, image, stock, badge, category, unique_id, images, return_policy, delivery_days, variants } = req.body;
+  const { name, description, price, originalPrice, original_price, image, stock, badge, category, sub_category, metadata, unique_id, images, return_policy, delivery_days, variants, cta_action } = req.body;
 
   if (!name || !price || !category) {
     return res.status(400).json({ error: 'Product name, price, and category are required' });
@@ -715,23 +800,43 @@ app.post('/yali_api/products', authenticateToken, async (req, res) => {
 
   const vendorId = req.user.role === 'vendor' ? req.user.id : null;
 
+  // Extract first image from images array if single image is not provided
+  let firstImg = null;
+  if (Array.isArray(images) && images.length > 0) {
+    firstImg = images[0];
+  } else if (typeof images === 'string' && images.trim()) {
+    try {
+      const parsed = JSON.parse(images);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        firstImg = parsed[0];
+      }
+    } catch (e) {
+      firstImg = images.split(',')[0].trim();
+    }
+  }
+  const finalImage = image || firstImg || 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=500&h=500&fit=crop';
+  const finalOriginalPrice = originalPrice !== undefined ? originalPrice : original_price;
+
   try {
     const [result] = await pool.query(
-      'INSERT INTO products (unique_id, name, description, price, original_price, image, stock, badge, category, vendor_id, images, return_policy, delivery_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO products (unique_id, name, description, price, original_price, image, stock, badge, category, sub_category, metadata, vendor_id, images, return_policy, delivery_days, cta_action) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         unique_id || null,
         name,
         description || '',
         parseFloat(price),
-        originalPrice ? parseFloat(originalPrice) : null,
-        image || 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=500&h=500&fit=crop',
+        finalOriginalPrice ? parseFloat(finalOriginalPrice) : null,
+        finalImage,
         parseInt(stock) || 0,
         badge || null,
         category,
+        sub_category || null,
+        metadata ? JSON.stringify(metadata) : null,
         vendorId,
         images ? JSON.stringify(images) : null,
         return_policy || '7 Days Replacement',
-        delivery_days ? parseInt(delivery_days) : 3
+        delivery_days ? parseInt(delivery_days) : 3,
+        cta_action || 'buy_now'
       ]
     );
 
@@ -780,12 +885,12 @@ app.put('/yali_api/products/:id', authenticateToken, async (req, res) => {
   }
 
   const productId = req.params.id;
-  const { name, description, price, originalPrice, image, stock, badge, category, unique_id, images, return_policy, delivery_days, variants } = req.body;
+  const { name, description, price, originalPrice, original_price, image, stock, badge, category, sub_category, metadata, unique_id, images, return_policy, delivery_days, variants, cta_action } = req.body;
 
   try {
     const [existing] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
     if (existing.length === 0) return res.status(404).json({ error: 'Product not found' });
-    
+
     const prod = existing[0];
 
     // Ownership checks
@@ -800,21 +905,41 @@ app.put('/yali_api/products/:id', authenticateToken, async (req, res) => {
       }
     }
 
+    // Extract first image from images array if single image is not provided
+    let firstImg = null;
+    if (Array.isArray(images) && images.length > 0) {
+      firstImg = images[0];
+    } else if (typeof images === 'string' && images.trim()) {
+      try {
+        const parsed = JSON.parse(images);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          firstImg = parsed[0];
+        }
+      } catch (e) {
+        firstImg = images.split(',')[0].trim();
+      }
+    }
+    const finalImage = image || firstImg || prod.image;
+    const finalOriginalPrice = originalPrice !== undefined ? originalPrice : (original_price !== undefined ? original_price : prod.original_price);
+
     await pool.query(
-      'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, image = ?, stock = ?, badge = ?, category = ?, unique_id = ?, images = ?, return_policy = ?, delivery_days = ? WHERE id = ?',
+      'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, image = ?, stock = ?, badge = ?, category = ?, sub_category = ?, metadata = ?, unique_id = ?, images = ?, return_policy = ?, delivery_days = ?, cta_action = ? WHERE id = ?',
       [
         name || prod.name,
         description !== undefined ? description : prod.description,
         price ? parseFloat(price) : prod.price,
-        originalPrice !== undefined ? (originalPrice ? parseFloat(originalPrice) : null) : prod.original_price,
-        image || prod.image,
+        finalOriginalPrice !== undefined ? (finalOriginalPrice ? parseFloat(finalOriginalPrice) : null) : prod.original_price,
+        finalImage,
         stock !== undefined ? parseInt(stock) : prod.stock,
         badge !== undefined ? badge : prod.badge,
         category || prod.category,
-        unique_id !== undefined ? unique_id : prod.unique_id,
+        sub_category !== undefined ? sub_category : prod.sub_category,
+        metadata !== undefined ? (metadata ? JSON.stringify(metadata) : null) : prod.metadata,
+        unique_id || prod.unique_id,
         images !== undefined ? (images ? JSON.stringify(images) : null) : prod.images,
-        return_policy !== undefined ? return_policy : prod.return_policy,
+        return_policy || prod.return_policy,
         delivery_days !== undefined ? parseInt(delivery_days) : prod.delivery_days,
+        cta_action || prod.cta_action,
         productId
       ]
     );
@@ -936,7 +1061,7 @@ app.post('/yali_api/products/import', authenticateToken, async (req, res) => {
 
 // Place an Order
 app.post('/yali_api/orders', authenticateToken, async (req, res) => {
-  const { address, paymentMethod, items, subtotal, tax, shipping, discount, total, appliedCoupon } = req.body;
+  const { address, paymentMethod, items, subtotal, tax, shipping, discount, total, appliedCoupon, transactionHash, transactionScreenshot } = req.body;
 
   if (!items || items.length === 0 || !address || !paymentMethod) {
     return res.status(400).json({ error: 'Missing required checkout details' });
@@ -988,7 +1113,7 @@ app.post('/yali_api/orders', authenticateToken, async (req, res) => {
       if (prod.length === 0) {
         throw new Error(`Product ${item.name} not found`);
       }
-      
+
       const currentStock = prod[0].stock;
       if (currentStock < item.quantity) {
         throw new Error(`Insufficient stock for product ${prod[0].name}`);
@@ -1014,9 +1139,10 @@ app.post('/yali_api/orders', authenticateToken, async (req, res) => {
 
     // 4. Save order record
     const orderId = 'ORD-' + Math.random().toString(36).substring(2, 11).toUpperCase();
-    const initialHistory = JSON.stringify([{ status: 'Pending', date: new Date().toISOString() }]);
+    const initialStatus = paymentMethod === 'USDT' ? 'Pending Payment Verification' : 'Pending';
+    const initialHistory = JSON.stringify([{ status: initialStatus, date: new Date().toISOString() }]);
     await connection.query(
-      'INSERT INTO orders (order_id, customer_id, customer_name, customer_email, address, payment_method, subtotal, tax, shipping, discount, total, status, category, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO orders (order_id, customer_id, customer_name, customer_email, address, payment_method, subtotal, tax, shipping, discount, total, status, category, status_history, transaction_hash, transaction_screenshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         orderId,
         req.user.id,
@@ -1029,16 +1155,18 @@ app.post('/yali_api/orders', authenticateToken, async (req, res) => {
         parseFloat(shipping),
         parseFloat(discount),
         parseFloat(total),
-        'Pending',
+        initialStatus,
         mainCategory,
-        initialHistory
+        initialHistory,
+        transactionHash || null,
+        transactionScreenshot || null
       ]
     );
 
     // 5. Save order items
     for (const item of items) {
       let itemVendorId = null;
-      
+
       // Auto-Routing per item
       for (const rule of routingRules) {
         if (rule.rule_type === 'product' && rule.target_value === item.id.toString()) {
@@ -1130,9 +1258,9 @@ app.get('/yali_api/orders', authenticateToken, async (req, res) => {
     const enrichedOrders = [];
     for (const order of orders) {
       const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.order_id]);
-      
+
       // If vendor, only return their specific items
-      const visibleItems = req.user.role === 'vendor' 
+      const visibleItems = req.user.role === 'vendor'
         ? items.filter(it => it.vendor_id === req.user.id)
         : items;
 
@@ -1189,11 +1317,11 @@ app.put('/yali_api/orders/:id/assign', authenticateToken, async (req, res) => {
 
     // Fetch vendor user details
     const [vendorRows] = await pool.query('SELECT u.name, u.email, vd.company_name FROM users u LEFT JOIN vendor_details vd ON u.id = vd.user_id WHERE u.id = ?', [vendorId]);
-    
+
     if (vendorRows.length > 0) {
       const vendor = vendorRows[0];
       const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
-      
+
       const fullOrderObj = {
         ...order,
         items
@@ -1253,13 +1381,19 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
     let history = [];
     try {
       if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
-    } catch(e) {}
-    history.push({ status, date: new Date().toISOString() });
+    } catch (e) { }
+    
+    if (!Array.isArray(history)) history = [];
+    
+    // Only add to history if status actually changed
+    if (order.status !== status || history.length === 0) {
+      history.push({ status, date: new Date().toISOString() });
+    }
 
     // Update the status and tracking info if provided
     let query = 'UPDATE orders SET status = ?, status_history = ?';
     const params = [status, JSON.stringify(history)];
-    
+
     if (trackingNumber !== undefined) {
       query += ', tracking_number = ?';
       params.push(trackingNumber);
@@ -1272,17 +1406,23 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
       query += ', delivery_partner = ?';
       params.push(deliveryPartner);
     }
-    
+
     query += ' WHERE order_id = ?';
     params.push(orderId);
 
     await pool.query(query, params);
 
+    // Also update all active items in the order to match the new order status
+    await pool.query(
+      'UPDATE order_items SET item_status = ? WHERE order_id = ? AND item_status NOT IN ("Cancelled", "Returned", "Return Requested", "Return Approved")',
+      [status, orderId]
+    );
+
     // If order was cancelled and was paid via WALLET, refund customer wallet balance
     if (status === 'Cancelled' && order.payment_method === 'WALLET' && order.status !== 'Cancelled') {
       await pool.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [order.total, order.customer_id]);
       await deductFromAdminWallet(order.total, pool);
-      
+
       // Log wallet transaction
       const txnId = 'TXN-REF-' + Date.now();
       await pool.query(
@@ -1295,7 +1435,7 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
     if (status === 'Returned' && order.status !== 'Returned') {
       await pool.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [order.subtotal, order.customer_id]);
       await deductFromAdminWallet(order.subtotal, pool);
-      
+
       // Log wallet transaction
       const txnId = 'TXN-RET-' + Date.now();
       await pool.query(
@@ -1322,7 +1462,7 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
     if (status === 'Shipped' && finalTracking) {
       notificationMessage += ` Tracking number: ${finalTracking}`;
     }
-    
+
     await pool.query(
       'INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)',
       [order.customer_id, notificationTitle, notificationMessage]
@@ -1334,14 +1474,14 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Update order status error:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error: ' + error.message + ' stack: ' + error.stack });
   }
 });
 
 // Update Order Item status (Vendor specific)
 app.put('/yali_api/order-items/:id/status', authenticateToken, async (req, res) => {
   const itemId = req.params.id;
-  const { status, trackingNumber } = req.body;
+  const { status, trackingNumber, trackingLink, deliveryPartner } = req.body;
 
   try {
     const [items] = await pool.query('SELECT * FROM order_items WHERE id = ?', [itemId]);
@@ -1360,6 +1500,14 @@ app.put('/yali_api/order-items/:id/status', authenticateToken, async (req, res) 
     if (trackingNumber !== undefined) {
       query += ', tracking_number = ?';
       params.push(trackingNumber);
+    }
+    if (trackingLink !== undefined) {
+      query += ', tracking_link = ?';
+      params.push(trackingLink);
+    }
+    if (deliveryPartner !== undefined) {
+      query += ', delivery_partner = ?';
+      params.push(deliveryPartner);
     }
 
     query += ' WHERE id = ?';
@@ -1469,7 +1617,7 @@ app.post('/yali_api/orders/:id/cancel', authenticateToken, async (req, res) => {
     let history = [];
     try {
       if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
-    } catch(e) {}
+    } catch (e) { }
     history.push({ status: 'Cancelled', date: new Date().toISOString() });
 
     // Calculate refund
@@ -1478,11 +1626,11 @@ app.post('/yali_api/orders/:id/cancel', authenticateToken, async (req, res) => {
     if (order.payment_method !== 'cod' && order.payment_method !== 'COD') {
       refundAmount = parseFloat(order.total);
       refundStatus = 'refunded';
-      
+
       // Credit wallet
       await connection.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [refundAmount, order.customer_id]);
       await deductFromAdminWallet(refundAmount, connection);
-      
+
       // Log transaction
       const txnId = 'TXN-CAN-' + Date.now();
       await connection.query(
@@ -1535,7 +1683,7 @@ app.post('/yali_api/orders/:id/return', authenticateToken, async (req, res) => {
     let history = [];
     try {
       if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
-    } catch(e) {}
+    } catch (e) { }
     history.push({ status: 'Return Requested', date: new Date().toISOString() });
 
     await pool.query(
@@ -1549,10 +1697,73 @@ app.post('/yali_api/orders/:id/return', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin Verify Crypto Payment
+app.post('/yali_api/admin/orders/:id/verify_crypto', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+  const orderId = req.params.id;
+  const { action } = req.body; // 'approve' or 'reject'
+
+  if (!['approve', 'reject'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid action. Use approve or reject.' });
+  }
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [orders] = await connection.query('SELECT * FROM orders WHERE order_id = ? FOR UPDATE', [orderId]);
+    if (orders.length === 0) throw new Error('Order not found');
+    const order = orders[0];
+
+    // Check if user is restricted by category
+    if (req.user.managed_category && req.user.managed_category !== 'all') {
+      if (req.user.managed_category !== order.category) {
+        throw new Error(`Unauthorized: You can only manage orders for '${req.user.managed_category}'.`);
+      }
+    }
+
+    if (order.status !== 'Pending Payment Verification') {
+      throw new Error('Order is not pending payment verification');
+    }
+
+    const newStatus = action === 'approve' ? 'Confirmed' : 'Cancelled';
+
+    let history = [];
+    try {
+      if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
+    } catch (e) { }
+    history.push({ status: newStatus, date: new Date().toISOString() });
+
+    await connection.query(
+      'UPDATE orders SET status = ?, status_history = ? WHERE order_id = ?',
+      [newStatus, JSON.stringify(history), orderId]
+    );
+
+    // If rejected, we must restore stock
+    if (newStatus === 'Cancelled') {
+      const [items] = await connection.query('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [orderId]);
+      for (const item of items) {
+        await connection.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
+      }
+    }
+
+    await connection.commit();
+    res.json({ message: `Crypto payment ${action}d successfully` });
+  } catch (err) {
+    if (connection) await connection.rollback();
+    console.error('Verify crypto error:', err);
+    res.status(500).json({ error: err.message || 'Server error' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
 // Admin Approve Return endpoint
 app.post('/yali_api/admin/orders/:id/approve_return', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  
+
   const orderId = req.params.id;
   let connection;
   try {
@@ -1574,13 +1785,13 @@ app.post('/yali_api/admin/orders/:id/approve_return', authenticateToken, async (
     let history = [];
     try {
       if (order.status_history) history = typeof order.status_history === 'string' ? JSON.parse(order.status_history) : order.status_history;
-    } catch(e) {}
+    } catch (e) { }
     history.push({ status: 'Returned', date: new Date().toISOString() });
 
     // Credit wallet
     await connection.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [productPriceOnly, order.customer_id]);
     await deductFromAdminWallet(productPriceOnly, connection);
-    
+
     const txnId = 'TXN-RET-' + Date.now();
     await connection.query(
       'INSERT INTO wallet_transactions (id, user_id, type, amount, description) VALUES (?, ?, ?, ?, ?)',
@@ -1616,7 +1827,7 @@ app.post('/yali_api/admin/orders/:id/approve_return', authenticateToken, async (
 app.get('/yali_api/addresses', authenticateToken, async (req, res) => {
   try {
     const [addresses] = await pool.query('SELECT * FROM user_addresses WHERE user_id = ? ORDER BY id DESC', [req.user.id]);
-    
+
     const mapped = addresses.map(a => ({
       id: a.id,
       user_id: a.user_id,
@@ -1662,7 +1873,7 @@ app.post('/yali_api/addresses', authenticateToken, async (req, res) => {
 // Update an address
 app.put('/yali_api/addresses/:id', authenticateToken, async (req, res) => {
   const { title, full_name, phone, address_line, city, state, pincode, is_default } = req.body;
-  
+
   try {
     if (is_default) {
       await pool.query('UPDATE user_addresses SET is_default = FALSE WHERE user_id = ?', [req.user.id]);
@@ -1755,7 +1966,7 @@ app.get('/yali_api/users', authenticateToken, async (req, res) => {
       LEFT JOIN vendor_details vd ON u.id = vd.user_id
       ORDER BY u.id DESC
     `);
-    
+
     const parsedUsers = rows.map(u => ({
       id: u.id,
       name: u.name,
@@ -1940,7 +2151,7 @@ app.post('/yali_api/coupons', authenticateToken, async (req, res) => {
 // Delete Coupon
 app.delete('/yali_api/coupons/:code', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
-  
+
   try {
     await pool.query('DELETE FROM coupons WHERE code = ?', [req.params.code]);
     res.json({ message: 'Coupon deleted successfully' });
@@ -1952,7 +2163,7 @@ app.delete('/yali_api/coupons/:code', authenticateToken, async (req, res) => {
 // Update Coupon
 app.put('/yali_api/coupons/:code', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
-  
+
   const originalCode = req.params.code;
   const { code, type, value, minOrder, expiry } = req.body;
 
@@ -2105,12 +2316,12 @@ app.get('/yali_api/videos', async (req, res) => {
   if (!all) {
     sql += ' AND status = "active"';
   }
-  
+
   if (category && category !== 'all') {
     sql += ' WHERE category = ?';
     params.push(category);
   }
-  
+
   try {
     const [rows] = await pool.query(sql, params);
     const videosList = rows.map(v => ({
@@ -2225,6 +2436,224 @@ app.delete('/yali_api/videos/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// -------------------------------------------------------------
+// 👥 USER MANAGEMENT ROUTES
+// -------------------------------------------------------------
+
+// Get Users (Staff, Dealers, Agents)
+app.get('/yali_api/users', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized. Admin only.' });
+
+  const { role, managed_category } = req.query;
+
+  try {
+    let query = `
+      SELECT 
+        u.id, u.name, u.email, u.phone, u.role, u.status, u.managed_category, u.created_at,
+        v.business_name as dealership,
+        (SELECT COUNT(*) FROM products p WHERE p.vendor_id = u.id AND p.status != 'sold') as activeListings,
+        (SELECT COUNT(*) FROM products p WHERE p.vendor_id = u.id AND p.status = 'sold') as totalSales
+      FROM users u
+      LEFT JOIN vendor_details v ON u.id = v.user_id
+      WHERE 1=1
+    `;
+    const queryParams = [];
+
+    if (role === 'admin') {
+      // Fetch all internal staff roles
+      query += ` AND u.role NOT IN ('customer', 'vendor')`;
+    } else if (role) {
+      query += ` AND u.role = ?`;
+      queryParams.push(role);
+    }
+
+    if (managed_category) {
+      query += ` AND u.managed_category = ?`;
+      queryParams.push(managed_category);
+    }
+
+    query += ` ORDER BY u.created_at DESC`;
+
+    const [users] = await pool.query(query, queryParams);
+    res.json(users);
+  } catch (error) {
+    console.error('Fetch users error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get Roles Aggregation
+app.get('/yali_api/roles', authenticateToken, async (req, res) => {
+  // Allow both legacy 'admin' and new 'Super Admin'
+  if (req.user.role !== 'admin' && req.user.role !== 'Super Admin') return res.status(403).json({ error: 'Unauthorized. Admin only.' });
+
+  try {
+    // Fetch actual roles from the database
+    const [roles] = await pool.query('SELECT * FROM roles ORDER BY id ASC');
+
+    // Fetch user counts per role
+    const [counts] = await pool.query(`
+      SELECT role, COUNT(*) as count 
+      FROM users 
+      GROUP BY role
+    `);
+
+    // Merge counts into roles
+    const enrichedRoles = roles.map(r => {
+      // Find matching count by role name
+      const match = counts.find(c => c.role === r.name);
+      return {
+        ...r,
+        users: match ? match.count : 0,
+        permissions: r.permissions || {} // Parse JSON if needed, though mysql2 usually parses JSON columns automatically
+      };
+    });
+
+    res.json(enrichedRoles);
+  } catch (error) {
+    console.error('Fetch roles error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// 🛍️ PRODUCTS CRUD ROUTES (UNIVERSAL CATEGORY MODEL)
+// -------------------------------------------------------------
+
+// Create Product
+app.post('/yali_api/products', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
+
+  const { unique_id, name, description, price, original_price, stock, badge, category, sub_category, images, return_policy, delivery_days, metadata } = req.body;
+  const vendor_id = req.user.role === 'vendor' ? req.user.id : (req.body.vendor_id || null);
+
+  if (!name || !price || !category) {
+    return res.status(400).json({ error: 'Name, price, and category are required' });
+  }
+
+  try {
+    const imagesJson = images ? JSON.stringify(images) : '[]';
+    const metadataJson = metadata ? JSON.stringify(metadata) : '{}';
+
+    const [result] = await pool.query(
+      `INSERT INTO products (
+        unique_id, name, description, price, original_price, stock, badge, 
+        category, sub_category, images, return_policy, delivery_days, vendor_id, metadata
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        unique_id || null, name, description || '', price, original_price || null, stock || 0, badge || null,
+        category, sub_category || null, imagesJson, return_policy || '7 Days Replacement', delivery_days || 3, vendor_id, metadataJson
+      ]
+    );
+
+    res.status(201).json({ message: 'Product created successfully', id: result.insertId });
+  } catch (error) {
+    console.error('Create product error:', error);
+    res.status(500).json({ error: 'Server error creating product' });
+  }
+});
+
+// Fetch Products (with optional category filter)
+app.get('/yali_api/products', async (req, res) => {
+  const { category, sub_category, all } = req.query;
+  let sql = 'SELECT * FROM products WHERE 1=1';
+  const params = [];
+
+  if (!all) {
+    sql += ' AND status = "active"';
+  }
+
+  if (category && category !== 'all') {
+    sql += ' AND category = ?';
+    params.push(category);
+  }
+
+  if (sub_category) {
+    sql += ' AND sub_category = ?';
+    params.push(sub_category);
+  }
+
+  sql += ' ORDER BY created_at DESC';
+
+  try {
+    const [rows] = await pool.query(sql, params);
+
+    // Parse JSON columns
+    const productsList = rows.map(p => ({
+      ...p,
+      images: p.images ? (typeof p.images === 'string' ? JSON.parse(p.images) : p.images) : [],
+      metadata: p.metadata ? (typeof p.metadata === 'string' ? JSON.parse(p.metadata) : p.metadata) : {}
+    }));
+
+    res.json(productsList);
+  } catch (error) {
+    console.error('Fetch products error:', error);
+    res.status(500).json({ error: 'Server error fetching products' });
+  }
+});
+
+// Update Product
+app.put('/yali_api/products/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
+
+  const productId = req.params.id;
+  const { name, description, price, original_price, stock, badge, category, sub_category, images, return_policy, delivery_days, status, metadata } = req.body;
+
+  try {
+    const [existing] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Product not found' });
+
+    if (req.user.role === 'vendor' && existing[0].vendor_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized: Not your product' });
+    }
+
+    const p = existing[0];
+    const imagesJson = images !== undefined ? JSON.stringify(images) : p.images;
+    const metadataJson = metadata !== undefined ? JSON.stringify(metadata) : p.metadata;
+
+    await pool.query(
+      `UPDATE products SET 
+        name = ?, description = ?, price = ?, original_price = ?, stock = ?, badge = ?, 
+        category = ?, sub_category = ?, images = ?, return_policy = ?, delivery_days = ?, status = ?, metadata = ?
+      WHERE id = ?`,
+      [
+        name || p.name, description !== undefined ? description : p.description, price !== undefined ? price : p.price,
+        original_price !== undefined ? original_price : p.original_price, stock !== undefined ? stock : p.stock,
+        badge !== undefined ? badge : p.badge, category || p.category, sub_category !== undefined ? sub_category : p.sub_category,
+        imagesJson, return_policy || p.return_policy, delivery_days || p.delivery_days, status || p.status, metadataJson,
+        productId
+      ]
+    );
+
+    res.json({ message: 'Product updated successfully' });
+  } catch (error) {
+    console.error('Update product error:', error);
+    res.status(500).json({ error: 'Server error updating product' });
+  }
+});
+
+// Delete Product
+app.delete('/yali_api/products/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
+
+  const productId = req.params.id;
+
+  try {
+    const [existing] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Product not found' });
+
+    if (req.user.role === 'vendor' && existing[0].vendor_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized: Not your product' });
+    }
+
+    await pool.query('DELETE FROM products WHERE id = ?', [productId]);
+    res.json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    console.error('Delete product error:', error);
+    res.status(500).json({ error: 'Server error deleting product' });
+  }
+});
+
 
 // -------------------------------------------------------------
 // 💳 WALLET TRANSACTIONS ROUTES
@@ -2232,7 +2661,7 @@ app.delete('/yali_api/videos/:id', authenticateToken, async (req, res) => {
 
 // Add money to Wallet
 app.post('/yali_api/wallet/add-money', authenticateToken, async (req, res) => {
-  const { amount } = req.body;
+  const { amount, paymentMethod, transactionHash, transactionScreenshot } = req.body;
   if (!amount || parseFloat(amount) <= 0) {
     return res.status(400).json({ error: 'Invalid deposit amount' });
   }
@@ -2249,20 +2678,35 @@ app.post('/yali_api/wallet/add-money', authenticateToken, async (req, res) => {
     }
 
     const currentBalance = parseFloat(users[0].wallet);
-    const newBalance = currentBalance + parseFloat(amount);
-
-    // Update wallet
-    await connection.query('UPDATE users SET wallet = ? WHERE id = ?', [newBalance, req.user.id]);
-
-    // Record wallet transaction
     const txnId = 'TXN-' + Date.now();
-    await connection.query(
-      'INSERT INTO wallet_transactions (id, user_id, type, amount, description) VALUES (?, ?, ?, ?, ?)',
-      [txnId, req.user.id, 'credit', parseFloat(amount), 'Credited money via gateway']
-    );
 
-    await connection.commit();
-    res.json({ message: 'Wallet deposit completed', newBalance });
+    if (paymentMethod === 'usdt') {
+      if (!transactionHash || !transactionScreenshot) {
+        return res.status(400).json({ error: 'USDT top-up requires transaction hash and screenshot' });
+      }
+
+      // Record as pending
+      await connection.query(
+        'INSERT INTO wallet_transactions (id, user_id, type, amount, description, status, transaction_hash, transaction_screenshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [txnId, req.user.id, 'credit', parseFloat(amount), 'USDT Top-up Request', 'pending', transactionHash, transactionScreenshot]
+      );
+
+      await connection.commit();
+      return res.json({ message: 'Top-up request under verification', newBalance: currentBalance, status: 'pending' });
+
+    } else {
+      // Normal online flow
+      const newBalance = currentBalance + parseFloat(amount);
+      await connection.query('UPDATE users SET wallet = ? WHERE id = ?', [newBalance, req.user.id]);
+
+      await connection.query(
+        'INSERT INTO wallet_transactions (id, user_id, type, amount, description, status) VALUES (?, ?, ?, ?, ?, ?)',
+        [txnId, req.user.id, 'credit', parseFloat(amount), 'Credited money via gateway', 'completed']
+      );
+
+      await connection.commit();
+      return res.json({ message: 'Wallet deposit completed', newBalance, status: 'completed' });
+    }
 
   } catch (error) {
     if (connection) await connection.rollback();
@@ -2282,12 +2726,82 @@ app.get('/yali_api/wallet/transactions', authenticateToken, async (req, res) => 
       type: r.type,
       amount: parseFloat(r.amount),
       description: r.description,
-      date: new Date(r.date).toLocaleDateString()
+      status: r.status,
+      date: new Date(r.date).toLocaleString('en-IN')
     }));
     res.json(txns);
   } catch (error) {
-    console.error('Fetch wallet transactions error:', error);
+    console.error('Fetch wallet txns error:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Fetch pending wallet crypto top-ups
+app.get('/yali_api/admin/wallet/pending-crypto', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const [rows] = await pool.query(`
+      SELECT w.*, u.name as user_name, u.email as user_email 
+      FROM wallet_transactions w 
+      JOIN users u ON w.user_id = u.id 
+      WHERE w.status = 'pending' AND w.type = 'credit'
+      ORDER BY w.date DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch pending wallet crypto error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin: Approve/Reject wallet crypto top-up
+app.post('/yali_api/admin/wallet/verify-crypto/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
+  const { action } = req.body; // 'approve' or 'reject'
+  const txnId = req.params.id;
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [txns] = await connection.query('SELECT * FROM wallet_transactions WHERE id = ? FOR UPDATE', [txnId]);
+    if (txns.length === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+    const txn = txns[0];
+    if (txn.status !== 'pending') {
+      return res.status(400).json({ error: 'Transaction is not pending' });
+    }
+
+    if (action === 'approve') {
+      // Add balance to user
+      const [users] = await connection.query('SELECT wallet FROM users WHERE id = ? FOR UPDATE', [txn.user_id]);
+      if (users.length === 0) throw new Error('User not found');
+
+      const newBalance = parseFloat(users[0].wallet) + parseFloat(txn.amount);
+      await connection.query('UPDATE users SET wallet = ? WHERE id = ?', [newBalance, txn.user_id]);
+
+      // Mark as completed
+      await connection.query('UPDATE wallet_transactions SET status = "completed" WHERE id = ?', [txnId]);
+
+      await connection.commit();
+      res.json({ message: 'Wallet top-up approved successfully' });
+    } else if (action === 'reject') {
+      // Mark as rejected
+      await connection.query('UPDATE wallet_transactions SET status = "rejected" WHERE id = ?', [txnId]);
+
+      await connection.commit();
+      res.json({ message: 'Wallet top-up rejected' });
+    } else {
+      res.status(400).json({ error: 'Invalid action' });
+    }
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Verify wallet crypto error:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -2374,13 +2888,13 @@ app.delete('/yali_api/ui-cards/:id', authenticateToken, async (req, res) => {
 
 app.patch('/yali_api/admin/:entity/:id/status', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
-  
+
   const { entity, id } = req.params;
   const { status } = req.body;
-  
+
   const validEntities = ['products', 'banners', 'videos', 'coupons', 'categories', 'ui-cards'];
   if (!validEntities.includes(entity)) return res.status(400).json({ error: 'Invalid entity' });
-  
+
   if (status !== 'active' && status !== 'inactive') return res.status(400).json({ error: 'Invalid status' });
 
   const idField = entity === 'coupons' ? 'code' : 'id';
@@ -2515,7 +3029,7 @@ app.delete('/yali_api/cart/:id', authenticateToken, async (req, res) => {
 // -------------------------------------------------------------
 app.get('/yali_api/pincodes/check/:pincode', async (req, res) => {
   const { pincode } = req.params;
-  
+
   // Basic mock logic: Assume any 6-digit number is serviceable
   if (/^\d{6}$/.test(pincode)) {
     return res.json({
@@ -2540,7 +3054,7 @@ app.get('/yali_api/products/:id/related', async (req, res) => {
     // Fetch product category
     const [prod] = await pool.query('SELECT category FROM products WHERE id = ?', [productId]);
     if (prod.length === 0) return res.status(404).json({ error: 'Product not found' });
-    
+
     // Fetch 4 related active products from the same category
     const [related] = await pool.query(
       'SELECT id, name, price, original_price, image, category, rating FROM products WHERE category = ? AND id != ? AND status = "active" ORDER BY RAND() LIMIT 4',
@@ -2752,7 +3266,7 @@ const updateProductRating = async (productId) => {
 app.get('/yali_api/products/:id/reviews', async (req, res) => {
   try {
     const [reviews] = await pool.query(
-      "SELECT * FROM product_reviews WHERE product_id = ? AND status = 'approved' ORDER BY created_at DESC", 
+      "SELECT * FROM product_reviews WHERE product_id = ? AND status = 'approved' ORDER BY created_at DESC",
       [req.params.id]
     );
     const parsedReviews = reviews.map(r => {
@@ -2843,7 +3357,7 @@ app.put('/yali_api/admin/reviews/:id/status', authenticateToken, async (req, res
   try {
     const [review] = await pool.query('SELECT product_id FROM product_reviews WHERE id = ?', [req.params.id]);
     await pool.query('UPDATE product_reviews SET status = ? WHERE id = ?', [req.body.status, req.params.id]);
-    
+
     if (review.length > 0) {
       await updateProductRating(review[0].product_id);
     }
@@ -2863,7 +3377,7 @@ app.delete('/yali_api/admin/reviews/:id', authenticateToken, async (req, res) =>
   try {
     const [review] = await pool.query('SELECT product_id FROM product_reviews WHERE id = ?', [req.params.id]);
     await pool.query('DELETE FROM product_reviews WHERE id = ?', [req.params.id]);
-    
+
     if (review.length > 0) {
       await updateProductRating(review[0].product_id);
     }
@@ -2884,7 +3398,7 @@ app.post('/yali_api/locations', async (req, res) => {
   if (!session_id || !latitude || !longitude) {
     return res.status(400).json({ error: 'Missing location data' });
   }
-  
+
   try {
     const [existing] = await pool.query('SELECT id FROM visitor_locations WHERE session_id = ?', [session_id]);
     if (existing.length > 0) {
@@ -2954,7 +3468,7 @@ app.post('/yali_api/page-sections', authenticateToken, async (req, res) => {
   try {
     const { page_id, section_type, title, subtitle, display_order, content, status } = req.body;
     const contentStr = content ? JSON.stringify(content) : null;
-    
+
     const [result] = await pool.query(
       'INSERT INTO page_sections (page_id, section_type, title, subtitle, display_order, content, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [page_id, section_type, title, subtitle, display_order || 0, contentStr, status || 'active']
@@ -2972,7 +3486,7 @@ app.put('/yali_api/page-sections/:id', authenticateToken, async (req, res) => {
   try {
     const { page_id, section_type, title, subtitle, display_order, content, status } = req.body;
     const contentStr = content ? JSON.stringify(content) : null;
-    
+
     await pool.query(
       'UPDATE page_sections SET page_id = ?, section_type = ?, title = ?, subtitle = ?, display_order = ?, content = ?, status = ? WHERE id = ?',
       [page_id, section_type, title, subtitle, display_order, contentStr, status, req.params.id]
@@ -3178,7 +3692,7 @@ app.get('/yali_api/settings/payment-gateways/active', async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ error: 'No active payment gateway found' });
     }
-    
+
     const activeGateway = rows[0];
     let config = {};
     try {
@@ -3224,7 +3738,7 @@ app.post('/yali_api/admin/payment-gateways', authenticateToken, async (req, res)
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
   const { name, display_name, config } = req.body;
   if (!name || !display_name) return res.status(400).json({ error: 'Name and Display Name are required' });
-  
+
   try {
     const jsonConfig = config ? JSON.stringify(config) : '{}';
     await pool.query(
@@ -3244,7 +3758,7 @@ app.post('/yali_api/admin/payment-gateways', authenticateToken, async (req, res)
 app.put('/yali_api/admin/payment-gateways/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
   const { display_name, config } = req.body;
-  
+
   try {
     let query = 'UPDATE payment_gateways SET ';
     const params = [];
@@ -3258,12 +3772,12 @@ app.put('/yali_api/admin/payment-gateways/:id', authenticateToken, async (req, r
     } else {
       query = query.slice(0, -2); // Remove trailing comma and space
     }
-    
+
     if (params.length === 0) return res.status(400).json({ error: 'Nothing to update' });
-    
+
     query += ' WHERE id = ?';
     params.push(req.params.id);
-    
+
     await pool.query(query, params);
     res.json({ message: 'Payment gateway updated successfully' });
   } catch (error) {
@@ -3274,21 +3788,21 @@ app.put('/yali_api/admin/payment-gateways/:id', authenticateToken, async (req, r
 
 app.put('/yali_api/admin/payment-gateways/:id/activate', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
-  
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     // Deactivate all
     await connection.query('UPDATE payment_gateways SET is_active = FALSE');
-    
+
     // Activate the selected one
     const [result] = await connection.query('UPDATE payment_gateways SET is_active = TRUE WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) {
       await connection.rollback();
       return res.status(404).json({ error: 'Payment gateway not found' });
     }
-    
+
     await connection.commit();
     res.json({ message: 'Payment gateway activated successfully' });
   } catch (error) {
@@ -3302,13 +3816,13 @@ app.put('/yali_api/admin/payment-gateways/:id/activate', authenticateToken, asyn
 
 app.delete('/yali_api/admin/payment-gateways/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
-  
+
   try {
     const [rows] = await pool.query('SELECT is_active FROM payment_gateways WHERE id = ?', [req.params.id]);
     if (rows.length > 0 && rows[0].is_active) {
       return res.status(400).json({ error: 'Cannot delete the currently active payment gateway. Please activate another one first.' });
     }
-    
+
     await pool.query('DELETE FROM payment_gateways WHERE id = ?', [req.params.id]);
     res.json({ message: 'Payment gateway deleted successfully' });
   } catch (error) {
@@ -3342,7 +3856,7 @@ app.post('/yali_api/admin/vendor-routing', authenticateToken, async (req, res) =
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
   const { vendor_id, rule_type, target_value, priority_score, is_active } = req.body;
   if (!vendor_id || !rule_type || !priority_score) return res.status(400).json({ error: 'Missing required fields' });
-  
+
   try {
     const [result] = await pool.query(
       'INSERT INTO vendor_routing_rules (vendor_id, rule_type, target_value, priority_score, is_active) VALUES (?, ?, ?, ?, ?)',
@@ -3358,7 +3872,7 @@ app.post('/yali_api/admin/vendor-routing', authenticateToken, async (req, res) =
 app.put('/yali_api/admin/vendor-routing/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
   const { vendor_id, rule_type, target_value, priority_score, is_active } = req.body;
-  
+
   try {
     await pool.query(
       'UPDATE vendor_routing_rules SET vendor_id = ?, rule_type = ?, target_value = ?, priority_score = ?, is_active = ? WHERE id = ?',
@@ -3390,7 +3904,7 @@ app.delete('/yali_api/admin/vendor-routing/:id', authenticateToken, async (req, 
 app.put('/yali_api/vendors/bank-details', authenticateToken, async (req, res) => {
   if (req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
   const { bankAccountNumber, ifscCode, accountHolderName, bankName } = req.body;
-  
+
   if (!bankAccountNumber || !ifscCode || !accountHolderName || !bankName) {
     return res.status(400).json({ error: 'All bank details are required' });
   }
@@ -3410,7 +3924,7 @@ app.put('/yali_api/vendors/bank-details', authenticateToken, async (req, res) =>
 app.post('/yali_api/payouts/request', authenticateToken, async (req, res) => {
   if (req.user.role !== 'vendor') return res.status(403).json({ error: 'Unauthorized' });
   const { amount } = req.body;
-  
+
   if (!amount || isNaN(amount) || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
 
   const conn = await pool.getConnection();
@@ -3418,7 +3932,7 @@ app.post('/yali_api/payouts/request', authenticateToken, async (req, res) => {
     await conn.beginTransaction();
     const [users] = await conn.query('SELECT wallet FROM users WHERE id = ? FOR UPDATE', [req.user.id]);
     if (users.length === 0) throw new Error('Vendor not found');
-    
+
     const walletBalance = parseFloat(users[0].wallet);
     if (walletBalance < amount) {
       throw new Error('Insufficient wallet balance');
@@ -3462,7 +3976,7 @@ app.get('/yali_api/payouts', authenticateToken, async (req, res) => {
     }
 
     const [rows] = await pool.query(query, params);
-    
+
     // Parse bank details safely
     const parsedRows = rows.map(r => ({
       ...r,
@@ -3480,7 +3994,7 @@ app.get('/yali_api/payouts', authenticateToken, async (req, res) => {
 app.put('/yali_api/payouts/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Unauthorized' });
   const { status, transaction_id, admin_notes } = req.body;
-  
+
   if (!['Approved', 'Rejected'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
   if (status === 'Approved' && !transaction_id) return res.status(400).json({ error: 'Transaction ID is required for approval' });
 
@@ -3490,7 +4004,7 @@ app.put('/yali_api/payouts/:id', authenticateToken, async (req, res) => {
     const [reqs] = await conn.query('SELECT * FROM payout_requests WHERE id = ? FOR UPDATE', [req.params.id]);
     if (reqs.length === 0) throw new Error('Payout request not found');
     const payoutReq = reqs[0];
-    
+
     if (payoutReq.status !== 'Pending') {
       throw new Error(`Cannot update request because it is already ${payoutReq.status}`);
     }
@@ -3501,7 +4015,7 @@ app.put('/yali_api/payouts/:id', authenticateToken, async (req, res) => {
     }
 
     await conn.query(
-      'UPDATE payout_requests SET status = ?, transaction_id = ?, admin_notes = ? WHERE id = ?', 
+      'UPDATE payout_requests SET status = ?, transaction_id = ?, admin_notes = ? WHERE id = ?',
       [status, transaction_id || null, admin_notes || null, req.params.id]
     );
 
@@ -3610,7 +4124,7 @@ app.get('/yali_api/returns', authenticateToken, async (req, res) => {
 app.put('/yali_api/returns/:id', authenticateToken, async (req, res) => {
   if (req.user.role === 'customer') return res.status(403).json({ error: 'Unauthorized' });
   const { status, admin_notes } = req.body;
-  
+
   if (!['Approved', 'Rejected', 'Received'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
   const conn = await pool.getConnection();
@@ -3647,10 +4161,10 @@ app.put('/yali_api/returns/:id', authenticateToken, async (req, res) => {
       const [items] = await conn.query('SELECT price, quantity FROM order_items WHERE id = ?', [returnReq.item_id]);
       if (items.length > 0) {
         const refundAmount = parseFloat(items[0].price) * parseInt(items[0].quantity);
-        
+
         // 1. Credit the customer's wallet
         await conn.query('UPDATE users SET wallet = wallet + ? WHERE id = ?', [refundAmount, returnReq.customer_id]);
-        
+
         // 2. Log the wallet transaction
         const txnId = 'TXN-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         await conn.query(
@@ -3712,7 +4226,7 @@ app.get('/yali_api/reports/:type', authenticateToken, async (req, res) => {
 
   try {
     let query = '';
-    
+
     switch (type) {
       case 'sales':
         query = `
@@ -3805,7 +4319,7 @@ app.get('/yali_api/reports/:type', authenticateToken, async (req, res) => {
           ORDER BY total_deliveries DESC
         `;
         break;
-        
+
       case 'abandoned':
         query = `
           SELECT 
@@ -3828,6 +4342,240 @@ app.get('/yali_api/reports/:type', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Report generation error:', error);
     res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+
+// -------------------------------------------------------------
+// 🚚 LOGISTICS & DELIVERY ROUTES
+// -------------------------------------------------------------
+
+// Delivery Partners
+app.get('/yali_api/delivery-partners', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM delivery_partners ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch delivery partners error:', error);
+    res.status(500).json({ error: 'Failed to fetch delivery partners' });
+  }
+});
+
+app.post('/yali_api/delivery-partners', authenticateToken, async (req, res) => {
+  const { name, phone, email, vehicle_type, vehicle_number, status } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO delivery_partners (name, phone, email, vehicle_type, vehicle_number, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, phone || null, email || null, vehicle_type || null, vehicle_number || null, status || 'active']
+    );
+    res.status(201).json({ message: 'Delivery partner created', id: result.insertId });
+  } catch (error) {
+    console.error('Create delivery partner error:', error);
+    res.status(500).json({ error: 'Failed to create delivery partner' });
+  }
+});
+
+app.put('/yali_api/delivery-partners/:id', authenticateToken, async (req, res) => {
+  const { name, phone, email, vehicle_type, vehicle_number, status } = req.body;
+  try {
+    await pool.query(
+      'UPDATE delivery_partners SET name = ?, phone = ?, email = ?, vehicle_type = ?, vehicle_number = ?, status = ? WHERE id = ?',
+      [name, phone || null, email || null, vehicle_type || null, vehicle_number || null, status || 'active', req.params.id]
+    );
+    res.json({ message: 'Delivery partner updated successfully' });
+  } catch (error) {
+    console.error('Update delivery partner error:', error);
+    res.status(500).json({ error: 'Failed to update delivery partner' });
+  }
+});
+
+app.delete('/yali_api/delivery-partners/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM delivery_partners WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Delivery partner deleted successfully' });
+  } catch (error) {
+    console.error('Delete delivery partner error:', error);
+    res.status(500).json({ error: 'Failed to delete delivery partner' });
+  }
+});
+
+// Shipping Rules
+app.get('/yali_api/shipping-rules', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM shipping_rules ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch shipping rules error:', error);
+    res.status(500).json({ error: 'Failed to fetch shipping rules' });
+  }
+});
+
+app.post('/yali_api/shipping-rules', authenticateToken, async (req, res) => {
+  const { zone_name, base_cost, per_kg_cost, estimated_days, status } = req.body;
+  if (!zone_name) return res.status(400).json({ error: 'Zone name is required' });
+
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO shipping_rules (zone_name, base_cost, per_kg_cost, estimated_days, status) VALUES (?, ?, ?, ?, ?)',
+      [zone_name, base_cost || 0, per_kg_cost || 0, estimated_days || null, status || 'active']
+    );
+    res.status(201).json({ message: 'Shipping rule created', id: result.insertId });
+  } catch (error) {
+    console.error('Create shipping rule error:', error);
+    res.status(500).json({ error: 'Failed to create shipping rule' });
+  }
+});
+
+app.put('/yali_api/shipping-rules/:id', authenticateToken, async (req, res) => {
+  const { zone_name, base_cost, per_kg_cost, estimated_days, status } = req.body;
+  try {
+    await pool.query(
+      'UPDATE shipping_rules SET zone_name = ?, base_cost = ?, per_kg_cost = ?, estimated_days = ?, status = ? WHERE id = ?',
+      [zone_name, base_cost || 0, per_kg_cost || 0, estimated_days || null, status || 'active', req.params.id]
+    );
+    res.json({ message: 'Shipping rule updated successfully' });
+  } catch (error) {
+    console.error('Update shipping rule error:', error);
+    res.status(500).json({ error: 'Failed to update shipping rule' });
+  }
+});
+
+app.delete('/yali_api/shipping-rules/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM shipping_rules WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Shipping rule deleted successfully' });
+  } catch (error) {
+    console.error('Delete shipping rule error:', error);
+    res.status(500).json({ error: 'Failed to delete shipping rule' });
+  }
+});
+
+// -------------------------------------------------------------
+// ENQUIRIES ROUTES
+// -------------------------------------------------------------
+// Auth: Get current user's own enquiries
+app.get('/yali_api/my-enquiries', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM enquiries WHERE user_id = ? ORDER BY created_at DESC',
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch my enquiries error:', error);
+    res.status(500).json({ error: 'Failed to fetch enquiries' });
+  }
+});
+
+// Public: Submit an enquiry (visit/test_drive/general enquiry)
+// -------------------------------------------------------------
+app.post('/yali_api/enquiries', async (req, res) => {
+  const { product_id, product_name, category, sub_category, enquiry_type, name, email, phone, preferred_date, message, cta_action, type } = req.body;
+
+  if (!name) {
+    return res.status(400).json({ error: 'name is required' });
+  }
+
+  try {
+    const userToken = req.headers['authorization'] ? req.headers['authorization'].split(' ')[1] : null;
+    let user_id = null;
+    if (userToken) {
+      try {
+        const decoded = jwt.verify(userToken, JWT_SECRET);
+        user_id = decoded.id || null;
+      } catch (e) {
+        // ignore token errors for public submission
+      }
+    }
+
+    // Derive correct ENUM type ('property','vehicle','general') from category
+    const cat = (category || '').toLowerCase();
+    const subCat = (sub_category || '').toLowerCase();
+    const combinedCat = cat + ' ' + subCat;
+    let enquiryType = type || 'general';
+    if (!type || !['property','vehicle','general'].includes(type)) {
+      // Properties Land main category + all its sub-categories
+      if (
+        cat.includes('properties land') ||
+        cat.includes('real estate') || cat.includes('real-estate') ||
+        cat.includes('land') || cat.includes('property') || cat.includes('plot') ||
+        cat.includes('residential') || cat.includes('commercial') ||
+        cat.includes('agricultural') || cat.includes('farmland') ||
+        subCat.includes('residential') || subCat.includes('commercial') ||
+        subCat.includes('agricultural') || subCat.includes('land') ||
+        subCat.includes('property') || subCat.includes('plot') ||
+        subCat.includes('buy') || subCat.includes('rent') ||
+        subCat.includes('lease') || subCat.includes('sell') ||
+        subCat.includes('property services')
+      ) {
+        enquiryType = 'property';
+      } else if (
+        cat.includes('automobile') || cat.includes('vehicle') ||
+        cat.includes('two wheeler') || cat.includes('four wheeler') ||
+        cat.includes('two wheelers') || cat.includes('four wheelers') ||
+        cat.includes('car') || cat.includes('bike') ||
+        subCat.includes('car') || subCat.includes('bike') ||
+        subCat.includes('scoot') || subCat.includes('truck') ||
+        subCat.includes('test drive')
+      ) {
+        enquiryType = 'vehicle';
+      } else {
+        enquiryType = 'general';
+      }
+    }
+    // Derive cta_action ENUM ('schedule_visit','test_drive','enquiry')
+    const rawCta = cta_action || enquiry_type || 'enquiry';
+    const ctaMap = { schedule_visit: 'schedule_visit', test_drive: 'test_drive', enquiry: 'enquiry' };
+    const ctaAction = ctaMap[rawCta] || 'enquiry';
+
+    const [result] = await pool.query(
+      `INSERT INTO enquiries (user_id, product_id, product_name, category, type, cta_action, full_name, email, phone, preferred_date, message, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [user_id, product_id || null, product_name || null, category || null, enquiryType, ctaAction, name, email || null, phone || null, preferred_date || null, message || null]
+    );
+
+    res.status(201).json({ message: 'Enquiry submitted', id: result.insertId });
+  } catch (error) {
+    console.error('Submit enquiry error:', error && (error.stack || error));
+    const resp = { error: 'Failed to submit enquiry' };
+    if (process.env.NODE_ENV !== 'production') resp.details = (error && (error.message || String(error))) || String(error);
+    res.status(500).json(resp);
+  }
+});
+
+// Admin: Get enquiries, optional filter by type or category
+app.get('/yali_api/admin/enquiries', authenticateToken, async (req, res) => {
+  // Only allow admin roles
+  if (!req.user || req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+
+  const { category, enquiry_type, type } = req.query;
+  let sql = 'SELECT * FROM enquiries';
+  const params = [];
+  const filters = [];
+
+  // Filter by type ENUM column
+  const typeFilter = type || enquiry_type;
+  if (typeFilter && ['property','vehicle','general'].includes(typeFilter)) {
+    filters.push('type = ?');
+    params.push(typeFilter);
+  }
+
+  // Filter by category text column (now exists)
+  if (category) {
+    filters.push('category LIKE ?');
+    params.push(`%${category}%`);
+  }
+
+  if (filters.length > 0) sql += ' WHERE ' + filters.join(' AND ');
+  sql += ' ORDER BY created_at DESC LIMIT 1000';
+
+  try {
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch enquiries error:', error);
+    res.status(500).json({ error: 'Failed to fetch enquiries' });
   }
 });
 

@@ -16,6 +16,9 @@ export function ProductDetailsPage({
   const { productId } = useParams();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const token = localStorage.getItem('yali_token');
+  const userStr = localStorage.getItem('yali_user');
+  const user = userStr ? JSON.parse(userStr) : null;
   const [activeTab, setActiveTab] = useState('description');
   const [selectedImage, setSelectedImage] = useState(null);
   const [pincode, setPincode] = useState('');
@@ -23,15 +26,15 @@ export function ProductDetailsPage({
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [fbtProducts, setFbtProducts] = useState([]);
   const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const [showEnquiryModal, setShowEnquiryModal] = useState(false);
+  const [enquiryForm, setEnquiryForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', preferred_date: '', message: '' });
+  const [isSubmittingEnquiry, setIsSubmittingEnquiry] = useState(false);
 
   const [reviews, setReviews] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '', media: [] });
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
-  const token = localStorage.getItem('yali_token');
-  const userStr = localStorage.getItem('yali_user');
-  const user = userStr ? JSON.parse(userStr) : null;
 
   const product = useMemo(() => allProducts.find(p => p.id === Number(productId)), [allProducts, productId]);
 
@@ -39,7 +42,11 @@ export function ProductDetailsPage({
     if (!product) return [];
     let extra = [];
     if (product.images) {
-      try { extra = JSON.parse(product.images); } catch(e) {}
+      if (Array.isArray(product.images)) {
+        extra = product.images;
+      } else {
+        try { extra = JSON.parse(product.images); } catch(e) {}
+      }
     }
     return [product.image, ...extra].filter(Boolean).map(img => {
       if (typeof img === 'string') return img.replace(/:\d+$/, '');
@@ -482,18 +489,29 @@ export function ProductDetailsPage({
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
-                <button 
-                  onClick={() => onBuyNow({ ...product, selectedVariant })}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm sm:text-base font-black py-3.5 sm:py-4 px-2 rounded-xl hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer whitespace-nowrap"
-                >
-                  Buy Now
-                </button>
-                <button 
-                  onClick={() => onAddToCart({ ...product, selectedVariant })}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm sm:text-base font-black py-3.5 sm:py-4 px-2 rounded-xl hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer whitespace-nowrap"
-                >
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" /> Add to Cart
-                </button>
+                {(!product.cta_action || product.cta_action === 'buy_now') ? (
+                  <>
+                    <button 
+                      onClick={() => onBuyNow({ ...product, selectedVariant })}
+                      className="flex-1 flex items-center justify-center gap-2 bg-[#1873e8] hover:opacity-90 text-white text-sm sm:text-base font-black py-3.5 sm:py-4 px-2 rounded-xl shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      Buy Now
+                    </button>
+                    <button 
+                      onClick={() => onAddToCart({ ...product, selectedVariant })}
+                      className="flex-1 flex items-center justify-center gap-2 bg-[#10b981] hover:opacity-90 text-white text-sm sm:text-base font-black py-3.5 sm:py-4 px-2 rounded-xl shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" /> Add to Cart
+                    </button>
+                  </>
+                ) : (
+                  <button 
+                    onClick={() => setShowEnquiryModal(true)}
+                    className="w-full flex items-center justify-center gap-2 bg-[#1873e8] hover:opacity-90 text-white text-lg font-black py-4 px-6 rounded-xl shadow-md hover:shadow-xl hover:scale-[1.01] transition-all cursor-pointer capitalize"
+                  >
+                    {product.cta_action.replace('_', ' ')}
+                  </button>
+                )}
               </div>
 
               {/* Trust Badges */}
@@ -708,6 +726,129 @@ export function ProductDetailsPage({
         )}
 
       </div>
+
+      {/* Enquiry Modal */}
+      {showEnquiryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h2 className="text-xl font-black text-gray-900 capitalize">
+                {product.cta_action.replace('_', ' ')} Form
+              </h2>
+              <button 
+                onClick={() => setShowEnquiryModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600 mb-4">
+                Please provide your contact details, and our representative will reach out to arrange your <span className="font-bold">{product.cta_action.replace('_', ' ')}</span> for <span className="font-bold">{product.name}</span>.
+              </p>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="John Doe"
+                  value={enquiryForm.name}
+                  onChange={(e) => setEnquiryForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  placeholder="+91 9876543210"
+                  value={enquiryForm.phone}
+                  onChange={(e) => setEnquiryForm(p => ({ ...p, phone: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+              {product.cta_action === 'schedule_visit' || product.cta_action === 'test_drive' ? (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Preferred Date</label>
+                  <input
+                    type="date"
+                    value={enquiryForm.preferred_date}
+                    onChange={(e) => setEnquiryForm(p => ({ ...p, preferred_date: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+              ) : null}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Email (optional)</label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={enquiryForm.email}
+                  onChange={(e) => setEnquiryForm(p => ({ ...p, email: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Message (optional)</label>
+                <textarea
+                  value={enquiryForm.message}
+                  onChange={(e) => setEnquiryForm(p => ({ ...p, message: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  rows={3}
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  setIsSubmittingEnquiry(true);
+                  try {
+                    const payload = {
+                      product_id: product.id,
+                      product_name: product.name,
+                      category: product.category,
+                      sub_category: product.sub_category || null,
+                      enquiry_type: product.cta_action || 'enquiry',
+                      name: enquiryForm.name,
+                      email: enquiryForm.email,
+                      phone: enquiryForm.phone,
+                      preferred_date: enquiryForm.preferred_date || null,
+                      message: enquiryForm.message || null
+                    };
+
+                    const headers = { 'Content-Type': 'application/json' };
+                    if (token) headers.Authorization = `Bearer ${token}`;
+
+                    const res = await fetch(`${API_URL}/enquiries`, {
+                      method: 'POST',
+                      headers,
+                      body: JSON.stringify(payload)
+                    });
+
+                    if (!res.ok) {
+                      const txt = await res.text();
+                      let err = 'Failed to submit enquiry';
+                      try { err = JSON.parse(txt).error || err; } catch(e) {}
+                      throw new Error(err);
+                    }
+
+                    setShowEnquiryModal(false);
+                    showToast('Your request has been submitted successfully. We will contact you soon!', 'success');
+                    // reset minimal fields
+                    setEnquiryForm({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', preferred_date: '', message: '' });
+                  } catch (err) {
+                    console.error('Enquiry submit error:', err);
+                    showToast(err.message || 'Failed to submit enquiry', 'error');
+                  } finally {
+                    setIsSubmittingEnquiry(false);
+                  }
+                }}
+                disabled={isSubmittingEnquiry}
+                className="w-full mt-4 bg-[#0066cc] hover:bg-[#0052a3] text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
+              >
+                {isSubmittingEnquiry ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

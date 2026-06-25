@@ -26,6 +26,7 @@ import { PullToRefresh } from './components/PullToRefresh';
 import { API_URL } from './config';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { StaticPage } from './components/StaticPage';
+import MegaCategories from './components/MegaCategories';
 import {
   Home,
   Building2,
@@ -49,7 +50,9 @@ import {
   Flame,
   BadgePercent,
   Package,
-  Heart
+  Heart,
+  ShieldAlert,
+  Headset
 } from 'lucide-react';
 import './styles/custom.css';
 import { useToast } from './context/ToastContext';
@@ -89,7 +92,7 @@ function SectionHeader({ icon: Icon, iconColor, title, subtitle, action, onActio
     <div className="flex items-center justify-between mb-5">
       <div className="flex items-center gap-3">
         {Icon && (
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${iconColor || 'bg-gradient-to-br from-[#0066cc] to-[#10b981]'}`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${iconColor || 'bg-[#1873e8]'}`}>
             <Icon className="w-4 h-4 text-white" />
           </div>
         )}
@@ -302,346 +305,100 @@ function HomePageSections({
       {/* ── 1. HERO BANNER ── */}
       <HeroBanner banners={banners} onCategoryClick={onCategoryClick} />
 
-      {/* ── 2. TRUST STRIP (Amazon-style scrolling ticker) ── */}
-      <div className="mt-5 bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="animate-marquee py-3 px-2">
-          {[...trustItems, ...trustItems].map((t, i) => (
-            <div key={i} className="flex items-center gap-2 px-6 whitespace-nowrap border-r border-gray-100 last:border-0">
-              <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center flex-shrink-0`}>
-                <t.icon className="w-3.5 h-3.5 text-white" />
+      {/* ── 2. MEGA CATEGORIES ── */}
+      <MegaCategories />
+
+      {/* ── 4. FLASH DEALS (Big Sale Is Live!) ── */}
+      <section className="mt-12 max-w-[1400px] mx-auto px-4">
+        <div className="rounded-[2rem] overflow-hidden bg-[#083366] p-6 md:p-10 mb-6 shadow-xl relative">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 z-10 relative">
+            
+            {/* Left Content */}
+            <div className="flex-1 text-white">
+              <div className="inline-block px-4 py-1.5 rounded-full bg-[#70A83B] text-white font-bold text-[10px] md:text-xs mb-4 shadow-sm tracking-wider uppercase">
+                Limited Time Offer
               </div>
-              <div>
-                <span className="text-xs font-bold text-gray-900">{t.label}</span>
-                <span className="text-xs text-gray-400 ml-1.5">{t.sub}</span>
-              </div>
+              <h2 className="text-3xl md:text-5xl font-black mb-3 tracking-tight">Big Sale Is Live!</h2>
+              <p className="text-white/90 text-sm md:text-base font-medium mb-6 max-w-sm">
+                Don't miss out on exclusive deals & huge discounts.
+              </p>
+              <button className="bg-white text-[#083366] hover:bg-gray-100 font-bold py-2.5 px-8 rounded-full shadow-lg transition-transform hover:scale-105">
+                Shop Now
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* ── 3. SHOP BY CATEGORY ── */}
-      <section className="mt-10">
-        <SectionHeader icon={Sparkles} iconColor="bg-gradient-to-br from-violet-500 to-purple-400" title="Shop by Category" subtitle="Find what you're looking for" />
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
-          {brandCards.map((bc) => (
-            <button
-              key={bc.cat}
-              onClick={() => onCategoryClick(bc.cat)}
-              className={`group flex flex-col items-center justify-center gap-1 sm:gap-2 p-2 sm:p-4 min-h-[90px] sm:min-h-[110px] rounded-2xl bg-gradient-to-br ${bc.gradient} text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer w-full overflow-hidden`}
-            >
-              <span className="text-2xl sm:text-3xl flex-shrink-0">{bc.emoji}</span>
-              <span className="text-[10px] sm:text-xs font-black text-center leading-tight break-words w-full px-1">{bc.label}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* ── 4. FLASH DEALS (Flipkart-style with live countdown) ── */}
-      <section className="mt-10">
-        <div className="rounded-2xl overflow-hidden bg-gradient-to-r from-[#0066cc] via-[#0080ff] to-[#10b981] p-5 mb-5 shadow-lg">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            {/* Middle: Countdown Timer */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-white fill-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-black text-white">Flash Deals</h2>
-                <p className="text-white/70 text-xs font-medium">Limited time · Unbeatable prices</p>
-              </div>
-            </div>
-            {/* Live countdown */}
-            <div className="flex items-center gap-2">
-              <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">Ends in</span>
-              {[{ v: countdown.h, l: 'HRS' }, { v: countdown.m, l: 'MIN' }, { v: countdown.s, l: 'SEC' }].map(({ v, l }, i) => (
-                <div key={l} className="flex items-center gap-1">
-                  {i > 0 && <span className="text-white/60 font-bold text-lg">:</span>}
-                  <div className="bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg px-3 py-1.5 text-center min-w-[52px]">
-                    <div className="text-xl font-black text-white tabular-nums">{pad(v)}</div>
-                    <div className="text-[9px] text-white/60 font-bold tracking-widest">{l}</div>
-                  </div>
+              {[{ v: countdown.d || 2, l: 'Days' }, { v: countdown.h, l: 'Hours' }, { v: countdown.m, l: 'Mins' }, { v: countdown.s, l: 'Secs' }].map(({ v, l }) => (
+                <div key={l} className="bg-white rounded-xl w-16 h-16 md:w-20 md:h-24 flex flex-col items-center justify-center shadow-lg transform transition-transform hover:scale-105">
+                  <span className="text-xl md:text-4xl font-black text-[#083366] tabular-nums leading-none mb-1">{pad(v)}</span>
+                  <span className="text-[10px] md:text-xs text-gray-500 font-bold">{l}</span>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-        <ProductScrollRow products={flashDeals.length > 0 ? flashDeals : products.slice(0, 8)} wishlistItems={wishlistItems} onAddToCart={onAddToCart} onProductClick={onProductClick} onToggleWishlist={onToggleWishlist} />
-      </section>
 
-      {/* ── 5. DEAL OF THE DAY (Amazon-style hero deal) ── */}
-      {products.length > 0 && (
-        <section className="mt-10">
-          <SectionHeader icon={Clock} iconColor="bg-gradient-to-br from-orange-500 to-red-400" title="Deal of the Day" subtitle="Handpicked offer · Refreshes daily" action="See all deals" onAction={() => { }} />
-          <div className="flex flex-col md:flex-row gap-5 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-            {/* Main deal product */}
-            {(() => {
-              const deal = products.find(p => p.discount > 0) || products[0];
-              if (!deal) return null;
-              return (
-                <>
-                  <div
-                    onClick={() => onProductClick?.(deal)}
-                    className="md:w-72 flex-shrink-0 relative bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8 cursor-pointer group"
-                  >
-                    <img
-                      src={deal.image}
-                      alt={deal.name}
-                      className="w-48 h-48 object-cover rounded-xl group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&q=80'; }}
-                    />
-                    {deal.discount && (
-                      <div className="absolute top-4 left-4 bg-red-500 text-white text-xs font-black px-2.5 py-1 rounded-full shadow-md">
-                        {deal.discount}% OFF
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 p-6 flex flex-col justify-center">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-black text-orange-600 bg-orange-50 border border-orange-200 px-3 py-1 rounded-full mb-3 w-fit">
-                      <Flame className="w-3 h-3" /> Deal of the Day
-                    </span>
-                    <h3
-                      onClick={() => onProductClick?.(deal)}
-                      className="text-xl font-black text-gray-900 mb-2 cursor-pointer hover:text-[#0066cc] transition-colors line-clamp-2"
-                    >{deal.name}</h3>
-                    <div className="flex items-baseline gap-2 mb-3">
-                      <span className="text-3xl font-black text-gray-900">{formatINR(deal.price)}</span>
-                      {deal.originalPrice && <span className="text-base text-gray-400 line-through">{formatINR(deal.originalPrice)}</span>}
-                    </div>
-                    {deal.rating && (
-                      <div className="flex items-center gap-1.5 mb-4">
-                        <div className="flex">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} className={`w-4 h-4 ${i < Math.floor(deal.rating) ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`} />
-                          ))}
-                        </div>
-                        <span className="text-sm text-gray-500 font-semibold">{deal.rating}</span>
-                      </div>
-                    )}
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => onAddToCart(deal)}
-                        className="flex-1 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white font-bold py-3 rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all text-sm cursor-pointer"
-                      >
-                        Add to Cart
-                      </button>
-                      <button
-                        onClick={() => onProductClick?.(deal)}
-                        className="px-5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold py-3 rounded-xl transition-colors text-sm cursor-pointer"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </div>
-                  {/* Side mini-deals */}
-                  <div className="hidden lg:flex flex-col gap-0 border-l border-gray-100 divide-y divide-gray-100 w-64 flex-shrink-0">
-                    {products.slice(1, 4).map(sp => (
-                      <div
-                        key={sp.id}
-                        onClick={() => onProductClick?.(sp)}
-                        className="flex items-center gap-3 p-4 hover:bg-gray-50 cursor-pointer transition-colors group"
-                      >
-                        <img src={sp.image} alt={sp.name} className="w-14 h-14 object-cover rounded-lg flex-shrink-0 group-hover:scale-105 transition-transform"
-                          onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=100&q=80'; }} />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-gray-800 line-clamp-2">{sp.name}</p>
-                          <p className="text-sm font-black text-[#0066cc]">{formatINR(sp.price)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </section>
-      )}
-
-      {/* ── 6. VIDEO SHOWCASE (Meesho-style reels) ── */}
-      <HomeVideoSection videos={videos} onCategoryClick={onCategoryClick} />
-
-      {/* ── 7. TRENDING NOW (Flipkart horizontal scroll) ── */}
-      <section className="mt-10">
-        <SectionHeader
-          icon={TrendingUp}
-          iconColor="bg-gradient-to-br from-[#0066cc] to-cyan-400"
-          title="Trending Now"
-          subtitle="What everyone is buying"
-          action="View all"
-          onAction={() => navigate('/search')}
-        />
-        <ProductScrollRow products={trendingProducts} wishlistItems={wishlistItems} onAddToCart={onAddToCart} onProductClick={onProductClick} onToggleWishlist={onToggleWishlist} autoScroll={true} />
-      </section>
-
-      {/* ── 8. TOP PICKS FOR YOU (Amazon-style: 1 big + 4 small) ── */}
-      {products.length >= 5 && (
-        <section className="mt-10">
-          <SectionHeader icon={Star} iconColor="bg-gradient-to-br from-amber-500 to-orange-400" title="Top Picks For You" subtitle="Curated just for you" action="See more" onAction={() => navigate('/search')} />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Big featured card */}
-            {topPicksMain && (
-              <div
-                onClick={() => onProductClick?.(topPicksMain)}
-                className="md:row-span-2 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow cursor-pointer group"
-              >
-                <div className="relative h-64 md:h-80 bg-gray-50 overflow-hidden">
-                  <img
-                    src={topPicksMain.image}
-                    alt={topPicksMain.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&q=80'; }}
-                  />
-                  {topPicksMain.discount && (
-                    <div className="absolute top-3 left-3 bg-red-500 text-white text-xs font-black px-2.5 py-1 rounded-full">{topPicksMain.discount}% OFF</div>
-                  )}
-                </div>
-                <div className="p-4">
-                  <p className="font-bold text-gray-900 line-clamp-2 mb-1">{topPicksMain.name}</p>
-                  <p className="text-xl font-black text-[#0066cc]">{formatINR(topPicksMain.price)}</p>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onAddToCart(topPicksMain); }}
-                    className="mt-3 w-full bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white text-sm font-bold py-2.5 rounded-xl hover:shadow-md transition-shadow cursor-pointer"
-                  >Add to Cart</button>
-                </div>
+            {/* Right: Circular Badge */}
+            <div className="hidden lg:flex items-center justify-center ml-8 pr-8">
+              <div className="w-40 h-40 rounded-full border-4 border-[#70A83B] flex flex-col items-center justify-center bg-[#70A83B] shadow-2xl">
+                <span className="text-white font-bold text-sm tracking-widest mb-[-5px]">UP TO</span>
+                <span className="text-white font-black text-6xl leading-none drop-shadow-sm">50%</span>
+                <span className="text-white font-bold text-xl tracking-widest mt-[-2px]">OFF</span>
               </div>
-            )}
-            {/* 4 side cards */}
-            {topPicksSide.map(p => (
-              <div
-                key={p.id}
-                onClick={() => onProductClick?.(p)}
-                className="flex gap-3 bg-white border border-gray-200 rounded-2xl p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer group items-center"
-              >
-                <img
-                  src={p.image} alt={p.name}
-                  className="w-16 h-16 object-cover rounded-xl flex-shrink-0 group-hover:scale-105 transition-transform"
-                  onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=100&q=80'; }}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-gray-800 line-clamp-2">{p.name}</p>
-                  <p className="text-base font-black text-[#0066cc] mt-0.5">{formatINR(p.price)}</p>
-                  {p.discount && <p className="text-xs text-red-500 font-bold">{p.discount}% off</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── 9. MID-PAGE PROMO BANNER (Meesho-style split) ── */}
-      {promoCards.length > 0 && (
-        <section className="mt-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {promoCards.map(promo => (
-              <div
-                key={promo.id}
-                onClick={() => promo.link_url && onCategoryClick(promo.link_url)}
-                className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${promo.color_gradient || 'from-gray-500 to-gray-600'} p-7 cursor-pointer group hover:shadow-xl transition-shadow`}
-                style={promo.image_url ? { backgroundImage: `url(${promo.image_url})`, backgroundSize: 'cover' } : {}}
-              >
-                <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full" />
-                <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-white/5 rounded-full" />
-                {promo.icon && <span className="relative inline-block bg-white/25 text-white text-xs font-black px-3 py-1 rounded-full mb-3 uppercase tracking-wider">{promo.icon}</span>}
-                <h3 className="relative text-2xl sm:text-3xl font-black text-white mb-1 break-words">{promo.title}</h3>
-                {promo.subtitle && <p className="relative text-white/80 text-xs sm:text-sm mb-4 break-words">{promo.subtitle}</p>}
-                <span className="relative inline-flex items-center gap-1.5 bg-white text-gray-800 text-xs font-black px-3 sm:px-4 py-2 rounded-full group-hover:gap-2.5 transition-all w-fit max-w-full overflow-hidden">
-                  <span className="truncate">Explore Now</span> <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── 10. BEST SELLERS (horizontal scroll) ── */}
-      <section className="mt-10">
-        <SectionHeader icon={Award} iconColor="bg-gradient-to-br from-[#10b981] to-teal-400" title="Best Sellers" subtitle="Most loved by our customers" action="View all" onAction={() => navigate('/search')} />
-        <ProductScrollRow products={bestSellers.length > 0 ? bestSellers : products.slice(0, 8)} wishlistItems={wishlistItems} onAddToCart={onAddToCart} onProductClick={onProductClick} onToggleWishlist={onToggleWishlist} />
-      </section>
-
-      {/* ── 11. SHOP BY BUDGET (Meesho filter pills) ── */}
-      <section className="mt-10">
-        <SectionHeader icon={BadgePercent} iconColor="bg-gradient-to-br from-pink-500 to-rose-400" title="Shop by Budget" subtitle="Pick your price range" />
-        {/* Filter Pills */}
-        <div className="flex flex-wrap gap-2 mb-5">
-          {budgetRanges.map(({ label, value }) => (
-            <button
-              key={value}
-              onClick={() => setBudgetFilter(value)}
-              className={`px-4 py-1.5 rounded-full text-sm font-bold border transition-all cursor-pointer ${budgetFilter === value
-                  ? 'budget-pill-active shadow-md'
-                  : 'border-gray-300 text-gray-600 bg-white hover:border-[#0066cc] hover:text-[#0066cc]'
-                }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {budgetProducts.length > 0 ? (
-          <ProductScrollRow products={budgetProducts.slice(0, 10)} wishlistItems={wishlistItems} onAddToCart={onAddToCart} onProductClick={onProductClick} onToggleWishlist={onToggleWishlist} />
-        ) : (
-          <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center">
-            <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 font-medium">No products in this budget range yet.</p>
-          </div>
-        )}
-      </section>
-
-      {/* ── 12. NEW ARRIVALS ── */}
-      <section className="mt-10">
-        <SectionHeader icon={Package} iconColor="bg-gradient-to-br from-violet-500 to-indigo-500" title="New Arrivals" subtitle="Just landed · Fresh picks" action="View all" onAction={() => navigate('/search')} />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {newArrivals.slice(0, 8).map(p => (
-            <div key={p.id}>
-              <ProductCard
-                product={p}
-                onAddToCart={onAddToCart}
-                onProductClick={onProductClick}
-                isWishlisted={wishlistItems.some(item => item.id === p.id)}
-                onToggleWishlist={onToggleWishlist}
-                isNew={true}
-              />
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* ── 13. BRAND / CATEGORY SHOWCASE ── */}
-      <section className="mt-10">
-        <SectionHeader icon={Sparkles} iconColor="bg-gradient-to-br from-amber-500 to-orange-400" title="Explore by Category" subtitle="Dive deeper into each world" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {brandCards.map((bc) => (
-            <button
-              key={bc.cat}
-              onClick={() => onCategoryClick(bc.cat)}
-              className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${bc.gradient} p-5 text-left cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 shadow-md`}
-            >
-              <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-white/10 rounded-full" />
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-3">
-                <bc.icon className="w-5 h-5 text-white" />
-              </div>
-              <p className="text-white font-black text-sm">{bc.label}</p>
-              <p className="text-white/60 text-xs mt-0.5 flex items-center gap-1 group-hover:gap-2 transition-all">
-                Shop now <ChevronRight className="w-3 h-3" />
-              </p>
-            </button>
-          ))}
+          </div>
         </div>
-      </section>
 
-      {/* ── 14. WHY SHOP WITH YALI (trust cards) ── */}
-      <section className="mt-10 mb-4">
-        <SectionHeader icon={Heart} iconColor="bg-gradient-to-br from-rose-500 to-pink-400" title="Why Shop with YALI?" subtitle="Trusted by thousands of happy customers" />
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {trustItems.map((t, i) => (
-            <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 text-center shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all group">
-              <div className={`w-12 h-12 bg-gradient-to-br ${t.color} rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-md group-hover:scale-110 transition-transform`}>
-                <t.icon className="w-5 h-5 text-white" />
-              </div>
-              <p className="font-bold text-gray-900 text-sm mb-0.5">{t.label}</p>
-              <p className="text-gray-500 text-xs">{t.sub}</p>
+        {/* Trust Badges Row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-8 border-b border-gray-100 mb-8">
+          <div className="flex items-center gap-3 justify-center md:justify-start group cursor-pointer">
+            <div className="p-2 rounded-lg transition-colors">
+              <ShieldAlert className="w-6 h-6 md:w-8 md:h-8 text-[#70A83B]" strokeWidth={1.5} />
             </div>
-          ))}
+            <div>
+              <p className="text-sm md:text-base font-black text-[#0B2347]">Trusted & Secure</p>
+              <p className="text-[10px] md:text-[11px] text-gray-500 font-medium">100% safe and secure platform.</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 justify-center md:justify-start group cursor-pointer">
+            <div className="p-2 rounded-lg transition-colors">
+              <Headset className="w-6 h-6 md:w-8 md:h-8 text-[#1873e8]" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-sm md:text-base font-black text-[#0B2347]">24/7 Support</p>
+              <p className="text-[10px] md:text-[11px] text-gray-500 font-medium">We are here to help you anytime.</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 justify-center md:justify-start group cursor-pointer">
+            <div className="p-2 rounded-lg transition-colors">
+              <Award className="w-6 h-6 md:w-8 md:h-8 text-[#ea580c]" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-sm md:text-base font-black text-[#0B2347]">Best Quality</p>
+              <p className="text-[10px] md:text-[11px] text-gray-500 font-medium">Quality products and services you can trust.</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 justify-center md:justify-start group cursor-pointer">
+            <div className="p-2 rounded-lg transition-colors">
+              <Tag className="w-6 h-6 md:w-8 md:h-8 text-[#8b5cf6]" strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-sm md:text-base font-black text-[#0B2347]">Great Deals</p>
+              <p className="text-[10px] md:text-[11px] text-gray-500 font-medium">Best prices and exciting offers every day.</p>
+            </div>
+          </div>
         </div>
       </section>
+
+
+
+
+
+
+
     </>
   );
 }
@@ -1272,129 +1029,129 @@ export default function App() {
         />
 
         {/* Store view routes */}
-        <main className="max-w-7xl mx-auto px-4 py-6 pb-20 md:pb-6">
+        <main className={`${location.pathname === '/' ? 'w-full' : 'max-w-7xl mx-auto px-4 py-6 pb-20 md:pb-6'}`}>
           <PullToRefresh>
             {(() => {
-            const activeProducts = products.filter(p => p.status === 'active');
-            const activeBanners = banners.filter(b => b.status === 'active');
-            const activeCategories = categories.filter(c => c.status === 'active');
-            const activeVideos = videos.filter(v => v.status === 'active');
-            const activeUiCards = uiCards.filter(c => c.status === 'active');
+              const activeProducts = products.filter(p => p.status === 'active');
+              const activeBanners = banners.filter(b => b.status === 'active');
+              const activeCategories = categories.filter(c => c.status === 'active');
+              const activeVideos = videos.filter(v => v.status === 'active');
+              const activeUiCards = uiCards.filter(c => c.status === 'active');
 
-            return (
-              <Routes>
-                <Route path="/" element={
-                  <HomePageSections
-                    banners={activeBanners}
-                    products={activeProducts}
-                    videos={activeVideos}
-                    categories={activeCategories}
-                    uiCards={activeUiCards}
-                    wishlistItems={wishlistItems}
-                    onCategoryClick={(cat) => navigate(`/category/${cat}`)}
-                    onAddToCart={handleAddToCart}
-                    onProductClick={(product) => navigate(`/product/${product.id}`)}
-                    onToggleWishlist={handleToggleWishlist}
-                  />
-                } />
-                <Route path="/search" element={
-                  <SearchResultsPage
-                    products={activeProducts}
-                    onAddToCart={handleAddToCart}
-                    wishlistItems={wishlistItems}
-                    onToggleWishlist={handleToggleWishlist}
-                  />
-                } />
-                <Route path="/category/:categoryId" element={
-                  <CategoryPageWrapper
-                    products={activeProducts}
-                    videos={activeVideos}
-                    subCategories={subCategories}
-                    onAddToCart={handleAddToCart}
-                    wishlistItems={wishlistItems}
-                    onToggleWishlist={handleToggleWishlist}
-                  />
-                } />
-                <Route path="/product/:productId" element={
-                  <ProductDetailsPage
-                    allProducts={activeProducts}
-                    onAddToCart={handleAddToCart}
-                    onBuyNow={handleBuyNow}
-                    wishlistItems={wishlistItems}
-                    onToggleWishlist={handleToggleWishlist}
-                  />
-                } />
-                <Route path="/cart" element={
-                  <CartPage
-                    items={cartItems}
-                    onUpdateQuantity={handleUpdateQuantity}
-                    onRemoveItem={handleRemoveItem}
-                    onRefreshCart={fetchCartItems}
-                    onProceedToCheckout={() => {
-                      setCheckoutItems(cartItems.filter(item => item.status !== 'saved'));
-                      navigate('/checkout');
-                    }}
-                  />
-                } />
-                <Route path="/wishlist" element={
-                  <WishlistPage
-                    items={wishlistItems}
-                    onRemoveItem={(item) => handleToggleWishlist(item)}
-                    onAddToCart={handleAddToCart}
-                  />
-                } />
-                <Route path="/checkout" element={
-                  <CheckoutPage
-                    items={checkoutItems.length > 0 ? checkoutItems : cartItems}
-                    onPaymentSuccess={handlePaymentSuccess}
-                    coupons={coupons}
-                    token={token}
-                    user={userData}
-                  />
-                } />
-                <Route path="/profile" element={
-                  <ProfilePage
-                    user={userData}
-                    orders={orders}
-                    transactions={walletTransactions}
-                    onAddMoney={handleAddMoneyToWallet}
-                    onLogout={handleLogout}
-                  />
-                } />
-                <Route path="/orders" element={
-                  <MyOrdersPage
-                    orders={orders}
-                    token={token}
-                    refreshOrders={fetchOrders}
-                    refreshUserData={fetchUserData}
-                    API_URL={API_URL}
-                  />
-                } />
-                <Route path="/page/:slug" element={<StaticPage />} />
-                <Route path="/p/:pageId" element={
-                  <CustomPage
-                    products={activeProducts}
-                    videos={activeVideos}
-                    banners={activeBanners}
-                    uiCards={activeUiCards}
-                    wishlistItems={wishlistItems}
-                    onAddToCart={handleAddToCart}
-                    onProductClick={(product) => navigate(`/product/${product.id}`)}
-                    onToggleWishlist={handleToggleWishlist}
-                    ProductScrollRowComponent={ProductScrollRow}
-                  />
-                } />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            );
-          })()}
+              return (
+                <Routes>
+                  <Route path="/" element={
+                    <HomePageSections
+                      banners={activeBanners}
+                      products={activeProducts}
+                      videos={activeVideos}
+                      categories={activeCategories}
+                      uiCards={activeUiCards}
+                      wishlistItems={wishlistItems}
+                      onCategoryClick={(cat) => navigate(`/category/${cat}`)}
+                      onAddToCart={handleAddToCart}
+                      onProductClick={(product) => navigate(`/product/${product.id}`)}
+                      onToggleWishlist={handleToggleWishlist}
+                    />
+                  } />
+                  <Route path="/search" element={
+                    <SearchResultsPage
+                      products={activeProducts}
+                      onAddToCart={handleAddToCart}
+                      wishlistItems={wishlistItems}
+                      onToggleWishlist={handleToggleWishlist}
+                    />
+                  } />
+                  <Route path="/category/:categoryId" element={
+                    <CategoryPageWrapper
+                      products={activeProducts}
+                      videos={activeVideos}
+                      subCategories={subCategories}
+                      onAddToCart={handleAddToCart}
+                      wishlistItems={wishlistItems}
+                      onToggleWishlist={handleToggleWishlist}
+                    />
+                  } />
+                  <Route path="/product/:productId" element={
+                    <ProductDetailsPage
+                      allProducts={activeProducts}
+                      onAddToCart={handleAddToCart}
+                      onBuyNow={handleBuyNow}
+                      wishlistItems={wishlistItems}
+                      onToggleWishlist={handleToggleWishlist}
+                    />
+                  } />
+                  <Route path="/cart" element={
+                    <CartPage
+                      items={cartItems}
+                      onUpdateQuantity={handleUpdateQuantity}
+                      onRemoveItem={handleRemoveItem}
+                      onRefreshCart={fetchCartItems}
+                      onProceedToCheckout={() => {
+                        setCheckoutItems(cartItems.filter(item => item.status !== 'saved'));
+                        navigate('/checkout');
+                      }}
+                    />
+                  } />
+                  <Route path="/wishlist" element={
+                    <WishlistPage
+                      items={wishlistItems}
+                      onRemoveItem={(item) => handleToggleWishlist(item)}
+                      onAddToCart={handleAddToCart}
+                    />
+                  } />
+                  <Route path="/checkout" element={
+                    <CheckoutPage
+                      items={checkoutItems.length > 0 ? checkoutItems : cartItems}
+                      onPaymentSuccess={handlePaymentSuccess}
+                      coupons={coupons}
+                      token={token}
+                      user={userData}
+                    />
+                  } />
+                  <Route path="/profile" element={
+                    <ProfilePage
+                      user={userData}
+                      orders={orders}
+                      transactions={walletTransactions}
+                      onAddMoney={handleAddMoneyToWallet}
+                      onLogout={handleLogout}
+                    />
+                  } />
+                  <Route path="/orders" element={
+                    <MyOrdersPage
+                      orders={orders}
+                      token={token}
+                      refreshOrders={fetchOrders}
+                      refreshUserData={fetchUserData}
+                      API_URL={API_URL}
+                    />
+                  } />
+                  <Route path="/page/:slug" element={<StaticPage />} />
+                  <Route path="/p/:pageId" element={
+                    <CustomPage
+                      products={activeProducts}
+                      videos={activeVideos}
+                      banners={activeBanners}
+                      uiCards={activeUiCards}
+                      wishlistItems={wishlistItems}
+                      onAddToCart={handleAddToCart}
+                      onProductClick={(product) => navigate(`/product/${product.id}`)}
+                      onToggleWishlist={handleToggleWishlist}
+                      ProductScrollRowComponent={ProductScrollRow}
+                    />
+                  } />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              );
+            })()}
           </PullToRefresh>
         </main>
       </div>
 
       <Footer />
 
-      <MobileBottomNav 
+      <MobileBottomNav
         cartCount={cartItems.length}
         onCartClick={() => navigate('/cart')}
         onAccountClick={handleAccountClick}

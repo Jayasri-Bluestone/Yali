@@ -9,7 +9,7 @@ export function MobileBottomNav({ cartCount, onCartClick, onAccountClick }) {
       <div className="flex items-center justify-around">
         <Link 
           to="/" 
-          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${location.pathname === '/' ? 'text-[#0066cc]' : 'text-gray-500 hover:text-gray-900'}`}
+          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${location.pathname === '/' ? 'text-[#10b981]' : 'text-gray-500 hover:text-gray-900'}`}
         >
           <Home className={`w-6 h-6 mb-1 ${location.pathname === '/' ? 'fill-current' : ''}`} />
           <span className="text-[10px] font-semibold">Home</span>
@@ -17,7 +17,7 @@ export function MobileBottomNav({ cartCount, onCartClick, onAccountClick }) {
 
         <Link 
           to="/search" 
-          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${location.pathname.includes('/search') || location.pathname.includes('/category') ? 'text-[#0066cc]' : 'text-gray-500 hover:text-gray-900'}`}
+          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${location.pathname.includes('/search') || location.pathname.includes('/category') ? 'text-[#10b981]' : 'text-gray-500 hover:text-gray-900'}`}
         >
           <Search className="w-6 h-6 mb-1" />
           <span className="text-[10px] font-semibold">Categories</span>
@@ -40,7 +40,7 @@ export function MobileBottomNav({ cartCount, onCartClick, onAccountClick }) {
 
         <button 
           onClick={onAccountClick}
-          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${location.pathname.includes('/profile') || location.pathname.includes('/orders') ? 'text-[#0066cc]' : 'text-gray-500 hover:text-gray-900'}`}
+          className={`flex flex-col items-center p-2 rounded-lg transition-colors ${location.pathname.includes('/profile') || location.pathname.includes('/orders') ? 'text-[#10b981]' : 'text-gray-500 hover:text-gray-900'}`}
         >
           <User className={`w-6 h-6 mb-1 ${location.pathname.includes('/profile') ? 'fill-current' : ''}`} />
           <span className="text-[10px] font-semibold">Account</span>

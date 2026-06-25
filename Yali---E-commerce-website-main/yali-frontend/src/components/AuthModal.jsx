@@ -234,7 +234,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
           </button>
 
           {/* Left Column - Theme Banner */}
-          <div className="w-full md:w-2/5 bg-gradient-to-br from-[#0066cc] to-[#10b981] p-8 text-white flex flex-col justify-between flex-shrink-0 relative overflow-hidden hidden md:flex">
+          <div className="w-full md:w-2/5 bg-[#1873e8] border-r-4 border-[#10b981] p-8 text-white flex flex-col justify-between flex-shrink-0 relative overflow-hidden hidden md:flex">
             <div className="relative z-10">
               <h2 className="text-[28px] font-semibold mb-4 leading-tight">
                 {mode === 'login' ? 'Login' : mode === 'register' ? "Looks like you're new here!" : 'Reset Password'}
@@ -442,7 +442,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white font-semibold text-[15px] shadow-sm hover:shadow-lg transition-all hover:opacity-90 disabled:opacity-70 mt-2 cursor-pointer rounded-md"
+                  className="w-full py-3.5 bg-[#1873e8] hover:bg-[#10b981] text-white font-semibold text-[15px] shadow-sm hover:shadow-lg transition-all disabled:opacity-70 mt-2 cursor-pointer rounded-md"
                 >
                   {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : mode === 'register' ? 'Continue' : mode === 'otp_request' ? 'Request OTP' : mode === 'otp_verify' ? 'Verify OTP' : 'Request Link')}
                 </button>

@@ -13,6 +13,9 @@ export default defineConfig({
       devOptions: {
         enabled: true
       },
+      workbox: {
+        maximumFileSizeToCacheInBytes: 5000000,
+      },
       manifest: {
         name: 'YALI E-Commerce',
         short_name: 'YALI',

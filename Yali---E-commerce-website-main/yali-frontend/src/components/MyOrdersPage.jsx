@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Package, ArrowLeft, Clock, CheckCircle, XCircle, RefreshCcw, ChevronRight, FileText } from 'lucide-react';
+import { Package, ArrowLeft, Clock, CheckCircle, XCircle, RefreshCcw, ChevronRight, FileText, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { InvoiceModal } from './InvoiceModal';
@@ -82,17 +82,21 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
     }
   };
 
-  const renderProgressTracker = (item, orderDate) => {
+  const renderProgressTracker = (item, order) => {
     const { item_status: status, tracking_number: trackingNumber, tracking_link: trackingLink, delivery_partner: deliveryPartner } = item;
-    if (['Cancelled', 'Returned', 'Return Requested', 'Return Approved'].includes(status)) return null;
+    if (['Cancelled', 'Returned', 'Return Requested', 'Return Approved'].includes(status) || ['Cancelled', 'Returned'].includes(order.status)) return null;
     
     const steps = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
-    const currentIndex = steps.indexOf(status);
+    
+    // Fallback to order.status if item.item_status is lagging behind due to older data
+    const itemIndex = steps.indexOf(status);
+    const orderIndex = steps.indexOf(order.status);
+    const currentIndex = Math.max(itemIndex, orderIndex);
 
     // We don't have item-level status_history yet, so we will just show the order_date for Pending
     const stepDates = {};
-    if (orderDate) {
-      stepDates['Pending'] = new Date(orderDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    if (order.order_date) {
+      stepDates['Pending'] = new Date(order.order_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
     }
     
     return (
@@ -226,6 +230,44 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
                   </div>
                 </div>
 
+                {/* Order Tracking Information */}
+                {(order.tracking_number || order.tracking_link || order.delivery_partner) && (
+                  <div className="bg-blue-50/50 px-6 py-4 border-b border-gray-200">
+                    <div className="flex flex-wrap items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-5 h-5 text-[#0066cc]" />
+                        <span className="font-bold text-gray-900 text-sm">Delivery & Tracking</span>
+                      </div>
+                      
+                      {order.delivery_partner && (
+                        <div className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded-lg border border-blue-100">
+                          <span className="text-gray-500 font-medium">Partner:</span>
+                          <span className="font-bold text-[#0066cc]">{order.delivery_partner}</span>
+                        </div>
+                      )}
+                      
+                      {order.tracking_number && (
+                        <div className="flex items-center gap-2 text-sm bg-white px-3 py-1.5 rounded-lg border border-blue-100">
+                          <span className="text-gray-500 font-medium">AWB/Tracking No:</span>
+                          <span className="font-mono font-bold text-gray-900">{order.tracking_number}</span>
+                        </div>
+                      )}
+                      
+                      {order.tracking_link && (
+                        <a 
+                          href={order.tracking_link.startsWith('http') ? order.tracking_link : `https://${order.tracking_link}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1.5 text-sm font-bold text-white bg-[#0066cc] hover:bg-[#0052a3] px-4 py-1.5 rounded-lg transition-colors ml-auto shadow-sm"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Track Shipment
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Order Items */}
                 <div className="p-6 divide-y divide-gray-100">
                   {order.items?.map((item, idx) => (
@@ -273,9 +315,32 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
                           <span className="font-semibold bg-gray-100 px-2 py-1 rounded-md">Qty: {item.quantity}</span>
                           <span className="font-bold text-gray-900">₹{parseFloat(item.price).toFixed(2)}</span>
                         </div>
-                        {item.tracking_number && (
-                          <div className="text-sm mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg inline-block">
-                            <span className="font-semibold text-blue-800">Tracking (AWB):</span> <span className="font-mono text-blue-900">{item.tracking_number}</span>
+                        {(item.tracking_number || item.tracking_link || item.delivery_partner) && (
+                          <div className="text-sm mt-2 p-3 bg-blue-50 border border-blue-100 rounded-xl inline-flex flex-col gap-1.5 shadow-sm">
+                            {item.delivery_partner && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-blue-800 text-xs uppercase tracking-wider">Logistics Partner:</span>
+                                <span className="font-semibold text-blue-900">{item.delivery_partner}</span>
+                              </div>
+                            )}
+                            {item.tracking_number && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-blue-800 text-xs uppercase tracking-wider">AWB / Tracking No:</span>
+                                <span className="font-mono text-blue-900 font-medium">{item.tracking_number}</span>
+                              </div>
+                            )}
+                            {item.tracking_link && (
+                              <div className="mt-1">
+                                <a 
+                                  href={item.tracking_link.startsWith('http') ? item.tracking_link : `https://${item.tracking_link}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0066cc] text-white text-xs font-bold rounded-lg hover:bg-[#0052a3] transition-colors"
+                                >
+                                  Track Shipment
+                                </a>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -302,7 +367,7 @@ export function MyOrdersPage({ orders, token, refreshOrders, API_URL, refreshUse
                         )}
                       </div>
                     </div>
-                    {renderProgressTracker(item, order.order_date)}
+                    {renderProgressTracker(item, order)}
                   </React.Fragment>
                   ))}
                 </div>

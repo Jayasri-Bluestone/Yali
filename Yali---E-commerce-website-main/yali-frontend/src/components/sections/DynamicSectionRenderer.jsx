@@ -13,7 +13,7 @@ export function SectionHeader({ iconName, iconColor, title, subtitle, action, on
     <div className="flex items-center justify-between mb-5">
       <div className="flex items-center gap-3">
         {iconName && (
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${iconColor || 'bg-gradient-to-br from-[#0066cc] to-[#10b981]'}`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${iconColor || 'bg-[#1873e8]'}`}>
             <Icon className="w-4 h-4 text-white" />
           </div>
         )}
@@ -69,7 +69,7 @@ export function DynamicSectionRenderer({
           <div className="animate-marquee py-3 px-2">
             {[...trustItems, ...trustItems].map((t, i) => (
               <div key={i} className="flex items-center gap-2 px-6 whitespace-nowrap border-r border-gray-100 last:border-0">
-                <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center flex-shrink-0`}>
+                <div className={`w-7 h-7 rounded-full bg-[#1873e8] flex items-center justify-center flex-shrink-0`}>
                   <t.icon className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div>
@@ -89,13 +89,13 @@ export function DynamicSectionRenderer({
       }));
       return (
         <section className="mt-10">
-          <SectionHeader iconName={content.icon || "Sparkles"} iconColor="bg-gradient-to-br from-violet-500 to-purple-400" title={section.title} subtitle={section.subtitle} />
+          <SectionHeader iconName={content.icon || "Sparkles"} iconColor="bg-[#1873e8]" title={section.title} subtitle={section.subtitle} />
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
             {brandCards.map((bc) => (
               <button
                 key={bc.cat}
                 onClick={() => onCategoryClick(bc.cat)}
-                className={`group flex flex-col items-center justify-center gap-1 sm:gap-2 p-2 sm:p-4 min-h-[90px] sm:min-h-[110px] rounded-2xl bg-gradient-to-br ${bc.gradient} text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer w-full overflow-hidden`}
+                className={`group flex flex-col items-center justify-center gap-1 sm:gap-2 p-2 sm:p-4 min-h-[90px] sm:min-h-[110px] rounded-2xl bg-[#1873e8] text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer w-full overflow-hidden`}
               >
                 <span className="text-2xl sm:text-3xl flex-shrink-0">{bc.emoji}</span>
                 <span className="text-[10px] sm:text-xs font-black text-center leading-tight break-words w-full px-1">{bc.label}</span>
@@ -125,7 +125,7 @@ export function DynamicSectionRenderer({
 
       return (
         <section className="mt-10">
-          <SectionHeader iconName={content.icon || "TrendingUp"} iconColor={content.color || "bg-gradient-to-br from-[#0066cc] to-cyan-400"} title={section.title} subtitle={section.subtitle} />
+          <SectionHeader iconName={content.icon || "TrendingUp"} iconColor={content.color || "bg-[#10b981]"} title={section.title} subtitle={section.subtitle} />
           {ProductScrollRowComponent && (
             <ProductScrollRowComponent 
               products={displayProducts} 
@@ -152,7 +152,7 @@ export function DynamicSectionRenderer({
               <div
                 key={promo.id}
                 onClick={() => promo.link_url && onCategoryClick(promo.link_url)}
-                className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${promo.color_gradient || 'from-gray-500 to-gray-600'} p-7 cursor-pointer group hover:shadow-xl transition-shadow`}
+                className={`relative rounded-2xl overflow-hidden bg-gray-500 p-7 cursor-pointer group hover:shadow-xl transition-shadow`}
                 style={promo.image_url ? { backgroundImage: `url(${promo.image_url})`, backgroundSize: 'cover' } : {}}
               >
                 <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full" />

@@ -40,7 +40,7 @@ export function InvoiceModal({
       {/* Modal */}
       <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl bg-white rounded-2xl z-50 overflow-hidden shadow-2xl mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white print:hidden">
+        <div className="flex items-center justify-between p-6 bg-[#1873e8] border-b-4 border-[#10b981] text-white print:hidden">
           <h2 className="text-2xl font-bold">Tax Invoice</h2>
           <div className="flex items-center gap-2">
             <button
@@ -72,8 +72,8 @@ export function InvoiceModal({
           <div className="flex justify-between items-start mb-8">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-12 h-12 bg-gradient-to-br from-[#22d3ee] via-[#0066cc] to-[#10b981] rounded-lg" />
-                <span className="text-3xl font-bold bg-gradient-to-r from-[#0066cc] to-[#10b981] bg-clip-text text-transparent">
+                <div className="w-12 h-12 bg-[#1873e8] rounded-lg" />
+                <span className="text-3xl font-bold text-[#1873e8]">
                   YALI
                 </span>
               </div>

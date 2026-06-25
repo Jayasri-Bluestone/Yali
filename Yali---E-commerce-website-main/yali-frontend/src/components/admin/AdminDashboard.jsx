@@ -25,38 +25,129 @@ import {
   Briefcase,
   Wallet,
   CreditCard,
-  Landmark
+  Landmark,
+  ChevronDown,
+  ChevronRight,
+  Settings,
+  Car,
+  Home,
+  Leaf,
+  Cookie,
+  Shirt,
+  Megaphone,
+  Star,
+  Headset
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
 // Import modular tab components
-import { DashboardTab } from './DashboardTab';
-import { ProductsTab } from './ProductsTab';
-import { CategoriesTab } from './CategoriesTab';
-import { SubCategoriesTab } from './SubCategoriesTab';
-import { OrdersTab } from './OrdersTab';
-import { CustomersTab } from './CustomersTab';
-import { AdminsTab } from './AdminsTab';
-import { VendorsTab } from './VendorsTab';
-import { CouponsTab } from './CouponsTab';
-import { BannersTab } from './BannersTab';
-import { VideosTab } from './VideosTab';
-import { UICardsTab } from './UICardsTab';
-import { CartsTab } from './CartsTab';
-import { WishlistsTab } from './WishlistsTab';
-import { LocationsTab } from './LocationsTab';
-import { ReviewsTab } from './ReviewsTab';
-import { PageBuilderTab } from './PageBuilderTab';
-import { DeliveryPartnersTab } from './DeliveryPartnersTab';
-import { ReturnsTab } from './ReturnsTab';
-import { CareersTab } from './CareersTab';
-import { AdminWalletTab } from './AdminWalletTab';
-import { PaymentGatewaysTab } from './PaymentGatewaysTab';
-import { SettlementsTab } from './SettlementsTab';
-import VendorRoutingTab from './VendorRoutingTab';
-import { ReportsTab } from './ReportsTab';
+import { DashboardTab } from './modules/Dashboard/DashboardTab';
+import { CustomersTab } from './modules/UserManagement/CustomersTab';
+import { VendorsTab } from './modules/UserManagement/VendorsTab';
+import { LocationsTab } from './modules/UserManagement/LocationsTab';
+import { ReturnsTab } from './modules/OrderManagement/ReturnsTab';
+import { SettlementsTab } from './modules/Finance/SettlementsTab';
+import { BannersTab } from './modules/Marketing/BannersTab';
+import { CouponsTab } from './modules/Marketing/CouponsTab';
+import { HomeFeaturesTab } from './modules/Marketing/HomeFeaturesTab';
+import { ReviewsTab } from './modules/Reviews/ReviewsTab';
+import { ReportsTab } from './modules/Reports/ReportsTab';
+import { PaymentGatewaysTab } from './modules/Settings/PaymentGatewaysTab';
+
 import { FileUploadInput } from './FileUploadInput';
+import { AdminPlaceholderTab } from './AdminPlaceholderTab';
 import { API_URL } from '../../config';
+
+import { RevenueAnalyticsTab } from './modules/Dashboard/RevenueAnalyticsTab';
+import { SalesAnalyticsTab } from './modules/Dashboard/SalesAnalyticsTab';
+import { UserAnalyticsTab } from './modules/Dashboard/UserAnalyticsTab';
+import { RecentActivitiesTab } from './modules/Dashboard/RecentActivitiesTab';
+import { DealersTab } from './modules/UserManagement/DealersTab';
+import { PropertyAgentsTab } from './modules/UserManagement/PropertyAgentsTab';
+import { StaffTab } from './modules/UserManagement/StaffTab';
+import { RolesPermissionsTab } from './modules/UserManagement/RolesPermissionsTab';
+import { PropertyListingsTab } from './modules/RealEstate/PropertyListingsTab';
+import { ResidentialTab } from './modules/RealEstate/ResidentialTab';
+import { CommercialTab } from './modules/RealEstate/CommercialTab';
+import { AgriculturalLandTab } from './modules/RealEstate/AgriculturalLandTab';
+import { VillasApartmentsTab } from './modules/RealEstate/VillasApartmentsTab';
+import { RentalsTab } from './modules/RealEstate/RentalsTab';
+import { PropertyEnquiriesTab } from './modules/RealEstate/PropertyEnquiriesTab';
+import { PropertyApprovalTab } from './modules/RealEstate/PropertyApprovalTab';
+import { VehicleListingsTab } from './modules/Automobiles/VehicleListingsTab';
+import { BikesTab } from './modules/Automobiles/BikesTab';
+import { ScootersTab } from './modules/Automobiles/ScootersTab';
+import { CarsTab } from './modules/Automobiles/CarsTab';
+import { SUVsTab } from './modules/Automobiles/SUVsTab';
+import { CommercialVehiclesTab } from './modules/Automobiles/CommercialVehiclesTab';
+import { VehicleEnquiriesTab } from './modules/Automobiles/VehicleEnquiriesTab';
+import { VehicleApprovalTab } from './modules/Automobiles/VehicleApprovalTab';
+import { OrganicCategoriesTab } from './modules/OrganicProducts/OrganicCategoriesTab';
+import { OrganicInventoryTab } from './modules/OrganicProducts/OrganicInventoryTab';
+import { OrganicSuppliersTab } from './modules/OrganicProducts/OrganicSuppliersTab';
+import { OrganicReviewsTab } from './modules/OrganicProducts/OrganicReviewsTab';
+import { DryFruitsCategoriesTab } from './modules/DryFruits/DryFruitsCategoriesTab';
+import { DryFruitsListingsTab } from './modules/DryFruits/DryFruitsListingsTab';
+import { DryFruitsInventoryTab } from './modules/DryFruits/DryFruitsInventoryTab';
+import { DryFruitsPricingTab } from './modules/DryFruits/DryFruitsPricingTab';
+import { DryFruitsReviewsTab } from './modules/DryFruits/DryFruitsReviewsTab';
+import { FashionCategoriesTab } from './modules/FashionApparel/FashionCategoriesTab';
+import { FashionMensTab } from './modules/FashionApparel/FashionMensTab';
+import { FashionWomensTab } from './modules/FashionApparel/FashionWomensTab';
+import { FashionKidsTab } from './modules/FashionApparel/FashionKidsTab';
+import { FashionAccessoriesTab } from './modules/FashionApparel/FashionAccessoriesTab';
+
+// Consolidated Views
+import { AutomobilesView } from './modules/Automobiles/AutomobilesView';
+import { OrganicProductsView } from './modules/OrganicProducts/OrganicProductsView';
+import { DryFruitsView } from './modules/DryFruits/DryFruitsView';
+import { CategoryOrdersView } from './modules/Shared/CategoryOrdersView';
+import { StatusOrdersView } from './modules/Shared/StatusOrdersView';
+import { FashionView } from './modules/Fashion/FashionView';
+import { FinanceRevenueTab } from './modules/Finance/FinanceRevenueTab';
+import { FinanceTransactionsTab } from './modules/Finance/FinanceTransactionsTab';
+import { FinanceCommissionsTab } from './modules/Finance/FinanceCommissionsTab';
+import { FinanceTaxTab } from './modules/Finance/FinanceTaxTab';
+import { MarketingFeaturedTab } from './modules/Marketing/MarketingFeaturedTab';
+import { MarketingPushTab } from './modules/Marketing/MarketingPushTab';
+import { MarketingEmailTab } from './modules/Marketing/MarketingEmailTab';
+import { ReviewsPropertyTab } from './modules/Reviews/ReviewsPropertyTab';
+import { ReviewsVehicleTab } from './modules/Reviews/ReviewsVehicleTab';
+import { ReviewsComplaintsTab } from './modules/Reviews/ReviewsComplaintsTab';
+import { ReportsUserTab } from './modules/Reports/ReportsUserTab';
+import { ReportsVendorTab } from './modules/Reports/ReportsVendorTab';
+import { ReportsPropertyTab } from './modules/Reports/ReportsPropertyTab';
+import { ReportsVehicleTab } from './modules/Reports/ReportsVehicleTab';
+import { ReportsProductTab } from './modules/Reports/ReportsProductTab';
+import { SupportRequestsTab } from './modules/Support/SupportRequestsTab';
+import { SupportTicketsTab } from './modules/Support/SupportTicketsTab';
+import { SupportChatTab } from './modules/Support/SupportChatTab';
+import { SupportFeedbackTab } from './modules/Support/SupportFeedbackTab';
+import { SettingsWebsiteTab } from './modules/Settings/SettingsWebsiteTab';
+import { SettingsSEOTab } from './modules/Settings/SettingsSEOTab';
+import { SettingsSocialTab } from './modules/Settings/SettingsSocialTab';
+import { SettingsSecurityTab } from './modules/Settings/SettingsSecurityTab';
+import { SettingsBackupTab } from './modules/Settings/SettingsBackupTab';
+
+// Storefront & CMS
+import { PageBuilderTab } from './modules/Storefront/PageBuilderTab';
+import { HomeLayoutTab } from './modules/Storefront/HomeLayoutTab';
+
+// Logistics & Delivery
+import { DeliveryPartnersTab } from './modules/Logistics/DeliveryPartnersTab';
+import { ShippingRulesTab } from './modules/Logistics/ShippingRulesTab';
+
+// Advanced Finance
+import { CustomerWalletsTab } from './modules/Finance/CustomerWalletsTab';
+import { PendingCryptoPaymentsTab } from './modules/Finance/PendingCryptoPaymentsTab';
+import { VendorSubscriptionsTab } from './modules/Finance/VendorSubscriptionsTab';
+
+// Marketing Extensions
+import { AbandonedCartsTab } from './modules/Marketing/AbandonedCartsTab';
+import { WishlistsTab } from './modules/Marketing/WishlistsTab';
+
+// Settings Extensions
+import { TaxRatesTab } from './modules/Settings/TaxRatesTab';
 
 export function AdminDashboard({
   products = [],
@@ -96,6 +187,7 @@ export function AdminDashboard({
   const location = useLocation();
   const activeTab = location.pathname.split('/')[2] || 'dashboard';
   const [productSearch, setProductSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState({ 'Dashboard': true });
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -175,43 +267,218 @@ export function AdminDashboard({
   const lowStockCount = filteredProducts.filter(p => (p.stock || 0) < 5).length;
 
   // Tab control lists based on roles
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: TrendingUp, show: true, group: 'General' },
-    { id: 'products', label: 'Products', icon: ShoppingBag, show: true, group: 'General' },
-    { id: 'orders', label: 'Orders', icon: Package, show: true, group: 'General' },
-    { id: 'categories', label: 'Categories', icon: Tag, show: userData?.role === 'admin', group: 'Catalog' },
-    { id: 'sub-categories', label: 'Sub-Cats', icon: Tag, show: userData?.role === 'admin', group: 'Catalog' },
-    { id: 'reviews', label: 'Product Reviews', icon: MessageSquare, show: userData?.role === 'admin', group: 'Catalog' },
-    
-    { id: 'users', label: 'Customers', icon: Users, show: userData?.role === 'admin', group: 'People & Accounts' },
-    { id: 'vendors', label: 'Vendor Partners', icon: Building, show: userData?.role === 'admin', group: 'People & Accounts' },
-    { id: 'admins', label: 'Administrators', icon: ShieldCheck, show: isSuperAdmin, group: 'People & Accounts' },
-    
-    { id: 'page-builder', label: 'Page Builder', icon: Layers, show: isSuperAdmin || isCategoryAdmin, group: 'Storefront' },
-    { id: 'storefront', label: 'Banners', icon: FileImage, show: isSuperAdmin || isCategoryAdmin, group: 'Storefront' },
-    { id: 'ui-cards', label: 'Site Cards', icon: Layers, show: isSuperAdmin, group: 'Storefront' },
-    { id: 'videos', label: 'Spotlight Videos', icon: Film, show: isSuperAdmin || isCategoryAdmin, group: 'Storefront' },
-    
-    { id: 'vendor-routing', label: 'Vendor Routing', icon: RefreshCcw, show: isSuperAdmin, group: 'Operations' },
-    { id: 'delivery-partners', label: 'Delivery Partners', icon: Truck, show: isSuperAdmin, group: 'Operations' },
-    { id: 'refunds-returns', label: 'Refunds & Returns', icon: RefreshCcw, show: userData?.role === 'admin' || isVendor, group: 'Operations' },
-    { id: 'careers', label: 'Careers', icon: Briefcase, show: isSuperAdmin, group: 'Operations' },
+  const MENU_STRUCTURE = [
+    {
+      group: 'Dashboard',
+      icon: TrendingUp,
+      show: true,
+      items: [
+        { id: 'dashboard', label: 'Overview', show: true },
+        { id: 'revenue-analytics', label: 'Revenue Analytics', show: isSuperAdmin || isVendor },
+        { id: 'sales-analytics', label: 'Sales Analytics', show: isSuperAdmin || isVendor },
+        { id: 'user-analytics', label: 'User Analytics', show: userData?.role === 'admin' },
+        { id: 'recent-activities', label: 'Recent Activities', show: true },
+      ]
+    },
+    {
+      group: 'Storefront & CMS',
+      icon: Layers,
+      show: isSuperAdmin,
+      items: [
+        { id: 'page-builder', label: 'Page Builder / Custom Pages', show: true },
+        { id: 'home-layout', label: 'Home Page Layout / UI Cards', show: true },
+      ]
+    },
+    {
+      group: 'User Management',
+      icon: Users,
+      show: userData?.role === 'admin',
+      items: [
+        { id: 'users', label: 'Customers', show: true },
+        { id: 'vendors', label: 'Vendors', show: true },
+        { id: 'dealers', label: 'Dealers', show: true },
+        { id: 'property-agents', label: 'Property Agents', show: true },
+        { id: 'staff', label: 'Staff', show: isSuperAdmin },
+        { id: 'roles-permissions', label: 'Roles & Permissions', show: isSuperAdmin },
+        { id: 'locations', label: 'Visitor Locations', show: isSuperAdmin },
+      ]
+    },
+    {
+      group: 'Real Estate',
+      icon: Home,
+      show: true,
+      items: [
+        { id: 'property-listings', label: 'Property Listings', show: true },
+        { id: 'residential', label: 'Residential', show: true },
+        { id: 'commercial', label: 'Commercial', show: true },
+        { id: 'agricultural-land', label: 'Agricultural Land', show: true },
+        { id: 'villas-apartments', label: 'Villas & Apartments', show: true },
+        { id: 'rentals', label: 'Rentals', show: true },
+        { id: 'property-enquiries', label: 'Property Enquiries', show: true },
+        { id: 'property-approval', label: 'Property Approval', show: isSuperAdmin },
+      ]
+    },
+    {
+      group: 'Automobiles',
+      icon: Car,
+      show: true,
+      items: [
+        { id: 'vehicle-listings', label: 'Vehicle Listings', show: true },
+        { id: 'bikes', label: 'Bikes', show: true },
+        { id: 'scooters', label: 'Scooters', show: true },
+        { id: 'cars', label: 'Cars', show: true },
+        { id: 'suvs', label: 'SUVs', show: true },
+        { id: 'commercial-vehicles', label: 'Commercial Vehicles', show: true },
+        { id: 'vehicle-enquiries', label: 'Vehicle Enquiries', show: true },
+        { id: 'vehicle-approval', label: 'Vehicle Approval', show: isSuperAdmin },
+      ]
+    },
+    {
+      group: 'Organic Products',
+      icon: Leaf,
+      show: true,
+      items: [
+        { id: 'organic-categories', label: 'Categories', show: true },
+        { id: 'products', label: 'Product Listings', show: true },
+        { id: 'organic-orders', label: 'Orders', show: true },
+        { id: 'organic-inventory', label: 'Inventory', show: true },
+        { id: 'organic-suppliers', label: 'Suppliers', show: true },
+        { id: 'organic-reviews', label: 'Reviews', show: true },
+      ]
+    },
+    {
+      group: 'Dry Fruits',
+      icon: Cookie,
+      show: true,
+      items: [
+        { id: 'dryfruits-categories', label: 'Categories', show: true },
+        { id: 'dryfruits-listings', label: 'Product Listings', show: true },
+        { id: 'dryfruits-orders', label: 'Orders', show: true },
+        { id: 'dryfruits-inventory', label: 'Inventory', show: true },
+        { id: 'dryfruits-pricing', label: 'Pricing', show: true },
+        { id: 'dryfruits-reviews', label: 'Reviews', show: true },
+      ]
+    },
+    {
+      group: 'Fashion & Apparel',
+      icon: Shirt,
+      show: true,
+      items: [
+        { id: 'fashion-categories', label: 'Categories', show: true },
+        { id: 'fashion-mens', label: "Men's Wear", show: true },
+        { id: 'fashion-womens', label: "Women's Wear", show: true },
+        { id: 'fashion-kids', label: 'Kids Wear', show: true },
+        { id: 'fashion-accessories', label: 'Accessories', show: true },
+        { id: 'fashion-orders', label: 'Orders', show: true },
+        { id: 'fashion-inventory', label: 'Inventory', show: true },
+      ]
+    },
+    {
+      group: 'Order Management',
+      icon: Package,
+      show: true,
+      items: [
+        { id: 'orders-new', label: 'New Orders', show: true },
+        { id: 'orders-processing', label: 'Processing', show: true },
+        { id: 'orders-shipped', label: 'Shipped', show: true },
+        { id: 'orders-delivered', label: 'Delivered', show: true },
+        { id: 'refunds-returns', label: 'Returns', show: true },
+        { id: 'orders-cancelled', label: 'Cancelled', show: true },
+      ]
+    },
+    {
+      group: 'Logistics & Delivery',
+      icon: Truck,
+      show: isSuperAdmin,
+      items: [
+        { id: 'delivery-partners', label: 'Delivery Partners / Riders', show: true },
+        { id: 'shipping-rules', label: 'Shipping Rules & Zones', show: true },
+      ]
+    },
+    {
+      group: 'Finance',
+      icon: Landmark,
+      show: isSuperAdmin || isVendor,
+      items: [
+        { id: 'finance-revenue', label: 'Revenue', show: true },
+        { id: 'finance-transactions', label: 'Transactions', show: true },
+        { id: 'settlements', label: 'Vendor Payouts', show: true },
+        { id: 'finance-commissions', label: 'Commissions', show: true },
+        { id: 'finance-tax', label: 'Tax Reports', show: true },
+        { id: 'customer-wallets', label: 'Customer Wallets', show: isSuperAdmin },
+        { id: 'crypto-payments', label: 'Crypto Verification', show: isSuperAdmin },
+        { id: 'vendor-subscriptions', label: 'Vendor Subscriptions', show: isSuperAdmin },
+      ]
+    },
+    {
+      group: 'Marketing',
+      icon: Megaphone,
+      show: isSuperAdmin,
+      items: [
+        { id: 'storefront', label: 'Banners', show: true },
+        { id: 'home-features', label: 'Home Features', show: true },
+        { id: 'marketing-featured', label: 'Featured Listings', show: true },
+        { id: 'coupons', label: 'Coupons', show: true },
+        { id: 'marketing-push', label: 'Push Notifications', show: true },
+        { id: 'marketing-email', label: 'Email Campaigns', show: true },
+        { id: 'abandoned-carts', label: 'Abandoned Carts', show: true },
+        { id: 'wishlists', label: 'Wishlist Analytics', show: true },
+      ]
+    },
+    {
+      group: 'Reviews & Ratings',
+      icon: Star,
+      show: userData?.role === 'admin',
+      items: [
+        { id: 'reviews', label: 'Product Reviews', show: true },
+        { id: 'reviews-property', label: 'Property Reviews', show: true },
+        { id: 'reviews-vehicle', label: 'Vehicle Reviews', show: true },
+        { id: 'reviews-complaints', label: 'Complaint Management', show: true },
+      ]
+    },
+    {
+      group: 'Reports',
+      icon: FileSpreadsheet,
+      show: isSuperAdmin || isVendor,
+      items: [
+        { id: 'reports', label: 'Sales Reports', show: true },
+        { id: 'reports-user', label: 'User Reports', show: isSuperAdmin },
+        { id: 'reports-vendor', label: 'Vendor Reports', show: isSuperAdmin },
+        { id: 'reports-property', label: 'Property Reports', show: true },
+        { id: 'reports-vehicle', label: 'Vehicle Reports', show: true },
+        { id: 'reports-product', label: 'Product Reports', show: true },
+      ]
+    },
+    {
+      group: 'Support Center',
+      icon: Headset,
+      show: true,
+      items: [
+        { id: 'support-requests', label: 'Contact Requests', show: true },
+        { id: 'support-tickets', label: 'Support Tickets', show: true },
+        { id: 'support-chat', label: 'Live Chat', show: true },
+        { id: 'support-feedback', label: 'Feedback', show: true },
+      ]
+    },
+    {
+      group: 'Settings',
+      icon: Settings,
+      show: isSuperAdmin,
+      items: [
+        { id: 'settings-website', label: 'Website Settings', show: true },
+        { id: 'payment-gateways', label: 'Payment Gateway', show: true },
+        { id: 'settings-seo', label: 'SEO Settings', show: true },
+        { id: 'settings-social', label: 'Social Media', show: true },
+        { id: 'settings-security', label: 'Security', show: true },
+        { id: 'settings-backup', label: 'Backup & Restore', show: true },
+        { id: 'tax-rates', label: 'Tax & Currency Rates', show: true },
+      ]
+    }
+  ];
 
-    { id: 'coupons', label: 'Coupons', icon: Percent, show: isSuperAdmin, group: 'Marketing & Finance' },
-    { id: 'admin-wallet', label: 'Admin Wallet', icon: Wallet, show: isSuperAdmin, group: 'Marketing & Finance' },
-    { id: 'payment-gateways', label: 'Payment Gateways', icon: CreditCard, show: isSuperAdmin, group: 'Marketing & Finance' },
-    { id: 'settlements', label: 'Payouts', icon: Landmark, show: isSuperAdmin || isVendor, group: 'Marketing & Finance' },
-    
-    { id: 'reports', label: 'Reports & Analytics', icon: FileSpreadsheet, show: isSuperAdmin || isVendor, group: 'Analytics' },
-    { id: 'locations', label: 'Visitor Locations', icon: MapPin, show: isSuperAdmin, group: 'Analytics' },
-  ].filter(t => t.show);
-
-  // Group tabs for rendering
-  const groupedTabs = tabs.reduce((acc, tab) => {
-    if (!acc[tab.group]) acc[tab.group] = [];
-    acc[tab.group].push(tab);
-    return acc;
-  }, {});
+  const toggleGroup = (groupName) => {
+    setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
+  };
 
   // -------------------------------------------------------------
   // API Operations
@@ -680,8 +947,8 @@ export function AdminDashboard({
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden" 
+        <div
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -709,36 +976,52 @@ export function AdminDashboard({
           </div>
 
           {/* Navigation Links */}
-          <nav className="flex-1 py-4 overflow-y-auto space-y-6 px-3">
-            {Object.entries(groupedTabs).map(([groupName, groupTabs]) => (
-              <div key={groupName}>
-                <h3 className="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  {groupName}
-                </h3>
-                <div className="space-y-1">
-                  {groupTabs.map(tab => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => {
-                          navigate(`/admin/${tab.id}`);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-semibold text-xs transition-all cursor-pointer ${isActive
-                            ? 'bg-gradient-to-r from-purple-700 to-indigo-650 text-white shadow-md shadow-indigo-900/30'
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
-                          }`}
-                      >
-                        <Icon className="w-4 h-4 shrink-0" />
-                        <span>{tab.label}</span>
-                      </button>
-                    );
-                  })}
+          <nav className="flex-1 py-4 overflow-y-auto space-y-2 px-3 custom-scrollbar">
+            {MENU_STRUCTURE.filter(g => g.show).map((group) => {
+              const GroupIcon = group.icon;
+              const isExpanded = expandedGroups[group.group];
+              const visibleItems = group.items.filter(item => item.show);
+              if (visibleItems.length === 0) return null;
+
+              return (
+                <div key={group.group} className="mb-2">
+                  <button
+                    onClick={() => toggleGroup(group.group)}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${isExpanded ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <GroupIcon className="w-4 h-4 shrink-0" />
+                      <span className="uppercase tracking-wider text-[10px]">{group.group}</span>
+                    </div>
+                    {isExpanded ? <ChevronDown className="w-4 h-4 opacity-50" /> : <ChevronRight className="w-4 h-4 opacity-50" />}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="mt-1 flex flex-col gap-0.5 ml-4 border-l border-slate-700/50 pl-2">
+                      {visibleItems.map(item => {
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              navigate(`/admin/${item.id}`);
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg font-semibold text-xs transition-all cursor-pointer ${isActive
+                                ? 'bg-gradient-to-r from-purple-700 to-indigo-650 text-white shadow-sm'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                              }`}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </nav>
         </div>
 
@@ -780,16 +1063,16 @@ export function AdminDashboard({
             </button>
             <div>
               <h2 className="text-xl font-black text-gray-900 capitalize tracking-wide">
-              {tabs.find(t => t.id === activeTab)?.label} View
-            </h2>
-            <p className="text-xs text-gray-400 mt-0.5 font-medium">
-              {isVendor
-                ? `Merchant console for: ${userData?.vendorDetails?.companyName || userData?.name}`
-                : (isCategoryAdmin
-                  ? `Scoped Category Admin Portal - Managing Category: '${adminCategory}'`
-                  : 'System-wide Super-Administrator Dashboard')}
-            </p>
-          </div>
+                {MENU_STRUCTURE.flatMap(g => g.items).find(t => t.id === activeTab)?.label || activeTab.replace(/-/g, ' ')} View
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5 font-medium">
+                {isVendor
+                  ? `Merchant console for: ${userData?.vendorDetails?.companyName || userData?.name}`
+                  : (isCategoryAdmin
+                    ? `Scoped Category Admin Portal - Managing Category: '${adminCategory}'`
+                    : 'System-wide Super-Administrator Dashboard')}
+              </p>
+            </div>
           </div>
 
           <button
@@ -822,69 +1105,13 @@ export function AdminDashboard({
               <ReviewsTab />
             } />
 
-            <Route path="/admin/products" element={
-              <ProductsTab
-                filteredProducts={filteredProducts}
-                productSearch={productSearch}
-                setProductSearch={setProductSearch}
-                categoryFilter={categoryFilter}
-                setCategoryFilter={setCategoryFilter}
-                categoriesList={categoriesList}
-                isCategoryAdmin={isCategoryAdmin}
-                adminCategory={adminCategory}
-                isVendor={isVendor}
-                handleImportCSV={handleImportCSV}
-                handleExportCSV={handleExportCSV}
-                setIsProductModalOpen={setIsProductModalOpen}
-                setEditingProduct={setEditingProduct}
-                setProductForm={setProductForm}
-                handleEditClick={handleEditClick}
-                handleDeleteProduct={handleDeleteProduct}
-                handleToggleStatus={handleToggleStatus}
-              />
-            } />
 
-            {userData?.role === 'admin' && (
-              <Route path="/admin/categories" element={
-                <CategoriesTab
-                  products={products}
-                  categoriesList={categoriesList}
-                  isCategoryAdmin={isCategoryAdmin}
-                  adminCategory={adminCategory}
-                  selectedCategoryTab={selectedCategoryTab}
-                  setSelectedCategoryTab={setSelectedCategoryTab}
-                  setEditingProduct={setEditingProduct}
-                  setProductForm={setProductForm}
-                  setIsProductModalOpen={setIsProductModalOpen}
-                  handleEditClick={handleEditClick}
-                  handleDeleteProduct={handleDeleteProduct}
-                  handleToggleStatus={handleToggleStatus}
-                />
-              } />
-            )}
-            
-            {userData?.role === 'admin' && (
-              <Route path="/admin/sub-categories" element={
-                <SubCategoriesTab
-                  categoriesList={categoriesList}
-                  token={token}
-                  handleToggleStatus={handleToggleStatus}
-                />
-              } />
-            )}
 
-            <Route path="/admin/orders" element={
-              <OrdersTab
-                filteredOrders={filteredOrders}
-                isSuperAdmin={isSuperAdmin}
-                approvedVendors={approvedVendors}
-                handleOrderStatusChange={handleOrderStatusChange}
-                handleOrderItemStatusChange={handleOrderItemStatusChange}
-                handleAssignOrder={handleAssignOrder}
-                handleTrackingUpdate={handleTrackingUpdate}
-                handleDeliveryDateUpdate={handleDeliveryDateUpdate}
-              />
-            } />
+
+
+
+
+
 
             {(userData?.role === 'admin' || isVendor) && (
               <Route path="/admin/refunds-returns" element={
@@ -913,17 +1140,8 @@ export function AdminDashboard({
 
             {isSuperAdmin && (
               <>
-                <Route path="/admin/admins" element={
-                  <AdminsTab
-                    users={users}
-                    categoriesList={categoriesList}
-                    handleToggleUserStatus={handleToggleUserStatus}
-                    handleUserRoleChange={handleUserRoleChange}
-                  />
-                } />
-                <Route path="/admin/admin-wallet" element={
-                  <AdminWalletTab token={token} />
-                } />
+
+
                 <Route path="/admin/payment-gateways" element={
                   <PaymentGatewaysTab token={token} />
                 } />
@@ -936,11 +1154,7 @@ export function AdminDashboard({
               } />
             )}
 
-            {isSuperAdmin && (
-              <Route path="/admin/delivery-partners" element={
-                <DeliveryPartnersTab />
-              } />
-            )}
+
 
             {userData?.role === 'admin' && (
               <Route path="/admin/vendors" element={
@@ -951,8 +1165,6 @@ export function AdminDashboard({
                   categoriesList={categoriesList}
                   refreshUsers={refreshUsers}
                   token={token}
-                  categoriesList={categoriesList}
-                  handleUserRoleChange={handleUserRoleChange}
                 />
               } />
             )}
@@ -984,49 +1196,15 @@ export function AdminDashboard({
               } />
             )}
 
-            {(isSuperAdmin || isCategoryAdmin) && (
-              <Route path="/admin/videos" element={
-                <VideosTab
-                  videos={videos}
-                  categoriesList={categoriesList}
-                  isCategoryAdmin={isCategoryAdmin}
-                  adminCategory={adminCategory}
-                  token={token}
-                  refreshVideos={refreshVideos}
-                  showToast={showToast}
-                  handleToggleStatus={handleToggleStatus}
-                />
-              } />
-            )}
 
-            {isSuperAdmin && (
-              <Route path="/admin/ui-cards" element={
-                <UICardsTab
-                  token={token}
-                  showToast={showToast}
-                  uiCards={uiCards}
-                  handleToggleStatus={handleToggleStatus}
-                />
-              } />
-            )}
 
-            {(isSuperAdmin || isCategoryAdmin) && (
-              <Route path="/admin/page-builder" element={
-                <PageBuilderTab token={token} />
-              } />
-            )}
 
-            {isSuperAdmin && (
-              <Route path="/admin/carts" element={
-                <CartsTab token={token} showToast={showToast} />
-              } />
-            )}
 
-            {isSuperAdmin && (
-              <Route path="/admin/wishlists" element={
-                <WishlistsTab token={token} showToast={showToast} />
-              } />
-            )}
+
+
+
+
+
 
             {isSuperAdmin && (
               <Route path="/admin/locations" element={
@@ -1034,19 +1212,100 @@ export function AdminDashboard({
               } />
             )}
 
-            {isSuperAdmin && (
-              <Route path="/admin/careers" element={
-                <CareersTab />
-              } />
-            )}
 
-            {isSuperAdmin && (
-              <Route path="/admin/vendor-routing" element={
-                <VendorRoutingTab token={token} />
-              } />
-            )}
 
-            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+
+
+
+
+            <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/admin/revenue-analytics" element={<RevenueAnalyticsTab />} />
+            <Route path="/admin/sales-analytics" element={<SalesAnalyticsTab />} />
+            <Route path="/admin/user-analytics" element={<UserAnalyticsTab />} />
+            <Route path="/admin/recent-activities" element={<RecentActivitiesTab />} />
+            <Route path="/admin/dealers" element={<DealersTab />} />
+            <Route path="/admin/property-agents" element={<PropertyAgentsTab />} />
+            <Route path="/admin/staff" element={<StaffTab />} />
+            <Route path="/admin/roles-permissions" element={<RolesPermissionsTab />} />
+            <Route path="/admin/property-listings" element={<PropertyListingsTab />} />
+            <Route path="/admin/residential" element={<ResidentialTab />} />
+            <Route path="/admin/commercial" element={<CommercialTab />} />
+            <Route path="/admin/agricultural-land" element={<AgriculturalLandTab />} />
+            <Route path="/admin/villas-apartments" element={<VillasApartmentsTab />} />
+            <Route path="/admin/rentals" element={<RentalsTab />} />
+            <Route path="/admin/property-enquiries" element={<PropertyEnquiriesTab />} />
+            <Route path="/admin/property-approval" element={<PropertyApprovalTab />} />
+            <Route path="/admin/vehicle-listings" element={<AutomobilesView defaultTab="Cars" />} />
+            <Route path="/admin/bikes" element={<AutomobilesView defaultTab="Bikes" />} />
+            <Route path="/admin/scooters" element={<AutomobilesView defaultTab="Scooters" />} />
+            <Route path="/admin/cars" element={<AutomobilesView defaultTab="Cars" />} />
+            <Route path="/admin/suvs" element={<AutomobilesView defaultTab="SUVs" />} />
+            <Route path="/admin/commercial-vehicles" element={<AutomobilesView defaultTab="Commercial" />} />
+            <Route path="/admin/vehicle-enquiries" element={<VehicleEnquiriesTab />} />
+            <Route path="/admin/vehicle-approval" element={<VehicleApprovalTab />} />
+            
+            <Route path="/admin/organic-categories" element={<OrganicProductsView defaultTab="vegetables" />} />
+            <Route path="/admin/products" element={<OrganicProductsView defaultTab="vegetables" />} />
+            <Route path="/admin/organic-orders" element={<CategoryOrdersView category="organic-products" categoryLabel="Organic Products" orders={filteredOrders} onStatusChange={handleOrderStatusChange} />} />
+            <Route path="/admin/organic-inventory" element={<OrganicProductsView defaultTab="vegetables" />} />
+            <Route path="/admin/organic-suppliers" element={<OrganicSuppliersTab />} />
+            <Route path="/admin/organic-reviews" element={<OrganicReviewsTab />} />
+            
+            <Route path="/admin/dryfruits-categories" element={<DryFruitsView defaultTab="nuts" />} />
+            <Route path="/admin/dryfruits-listings" element={<DryFruitsView defaultTab="dried-fruits" />} />
+            <Route path="/admin/dryfruits-orders" element={<CategoryOrdersView category="dry-fruits" categoryLabel="Dry Fruits" orders={filteredOrders} onStatusChange={handleOrderStatusChange} />} />
+            <Route path="/admin/dryfruits-inventory" element={<DryFruitsView defaultTab="seeds" />} />
+            <Route path="/admin/dryfruits-pricing" element={<DryFruitsPricingTab />} />
+            <Route path="/admin/dryfruits-reviews" element={<DryFruitsReviewsTab />} />
+            
+            <Route path="/admin/fashion-categories" element={<FashionView defaultTab="men" />} />
+            <Route path="/admin/fashion-mens" element={<FashionView defaultTab="men" />} />
+            <Route path="/admin/fashion-womens" element={<FashionView defaultTab="women" />} />
+            <Route path="/admin/fashion-kids" element={<FashionView defaultTab="kids" />} />
+            <Route path="/admin/fashion-accessories" element={<FashionView defaultTab="fashion-accessories" />} />
+            <Route path="/admin/fashion-orders" element={<CategoryOrdersView category="fashion" categoryLabel="Fashion & Apparel" orders={filteredOrders} onStatusChange={handleOrderStatusChange} />} />
+            <Route path="/admin/fashion-inventory" element={<FashionView defaultTab="men" />} />
+            <Route path="/admin/orders-new" element={<StatusOrdersView status="Pending" title="New Orders" description="Manage all new and pending orders." orders={filteredOrders} onStatusChange={handleOrderStatusChange} />} />
+            <Route path="/admin/orders-processing" element={<StatusOrdersView status="Confirmed" title="Processing Orders" description="Orders that have been confirmed and are being prepared." orders={filteredOrders} onStatusChange={handleOrderStatusChange} />} />
+            <Route path="/admin/orders-shipped" element={<StatusOrdersView status="Shipped" title="Shipped Orders" description="Orders that have been dispatched for delivery." orders={filteredOrders} onStatusChange={handleOrderStatusChange} />} />
+            <Route path="/admin/orders-delivered" element={<StatusOrdersView status="Delivered" title="Delivered Orders" description="Orders that have reached the customers." orders={filteredOrders} onStatusChange={handleOrderStatusChange} />} />
+            <Route path="/admin/orders-cancelled" element={<StatusOrdersView status="Cancelled" title="Cancelled Orders" description="Orders that were cancelled." orders={filteredOrders} onStatusChange={handleOrderStatusChange} />} />
+            <Route path="/admin/finance-revenue" element={<FinanceRevenueTab />} />
+            <Route path="/admin/finance-transactions" element={<FinanceTransactionsTab />} />
+            <Route path="/admin/finance-commissions" element={<FinanceCommissionsTab />} />
+            <Route path="/admin/finance-tax" element={<FinanceTaxTab />} />
+            <Route path="/admin/marketing-featured" element={<MarketingFeaturedTab />} />
+            <Route path="/admin/marketing-push" element={<MarketingPushTab />} />
+            <Route path="/admin/marketing-email" element={<MarketingEmailTab />} />
+            <Route path="/admin/home-features" element={<HomeFeaturesTab token={token} />} />
+            <Route path="/admin/reviews-property" element={<ReviewsPropertyTab />} />
+            <Route path="/admin/reviews-vehicle" element={<ReviewsVehicleTab />} />
+            <Route path="/admin/reviews-complaints" element={<ReviewsComplaintsTab />} />
+            <Route path="/admin/reports-user" element={<ReportsUserTab />} />
+            <Route path="/admin/reports-vendor" element={<ReportsVendorTab />} />
+            <Route path="/admin/reports-property" element={<ReportsPropertyTab />} />
+            <Route path="/admin/reports-vehicle" element={<ReportsVehicleTab />} />
+            <Route path="/admin/reports-product" element={<ReportsProductTab />} />
+            <Route path="/admin/support-requests" element={<SupportRequestsTab />} />
+            <Route path="/admin/support-tickets" element={<SupportTicketsTab />} />
+            <Route path="/admin/support-chat" element={<SupportChatTab />} />
+            <Route path="/admin/support-feedback" element={<SupportFeedbackTab />} />
+            <Route path="/admin/settings-website" element={<SettingsWebsiteTab />} />
+            <Route path="/admin/settings-seo" element={<SettingsSEOTab />} />
+            <Route path="/admin/settings-social" element={<SettingsSocialTab />} />
+            <Route path="/admin/settings-security" element={<SettingsSecurityTab />} />
+            <Route path="/admin/settings-backup" element={<SettingsBackupTab />} />
+            <Route path="/admin/page-builder" element={<PageBuilderTab />} />
+            <Route path="/admin/home-layout" element={<HomeLayoutTab />} />
+            <Route path="/admin/delivery-partners" element={<DeliveryPartnersTab />} />
+            <Route path="/admin/shipping-rules" element={<ShippingRulesTab />} />
+            <Route path="/admin/customer-wallets" element={<CustomerWalletsTab />} />
+            <Route path="/admin/crypto-payments" element={<PendingCryptoPaymentsTab />} />
+            <Route path="/admin/vendor-subscriptions" element={<VendorSubscriptionsTab />} />
+            <Route path="/admin/abandoned-carts" element={<AbandonedCartsTab />} />
+            <Route path="/admin/wishlists" element={<WishlistsTab />} />
+            <Route path="/admin/tax-rates" element={<TaxRatesTab />} />
+            <Route path="*" element={<AdminPlaceholderTab />} />
           </Routes>
 
         </div>
@@ -1125,8 +1384,8 @@ export function AdminDashboard({
                         return true;
                       })
                       .map(c => (
-                      <option key={c.value} value={c.value}>{c.label}</option>
-                    ))}
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
                   </select>
                 </div>
                 <div>

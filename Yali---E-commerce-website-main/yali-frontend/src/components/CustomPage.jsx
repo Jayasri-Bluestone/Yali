@@ -54,7 +54,7 @@ export function CustomPage({
         </p>
         <button 
           onClick={() => navigate('/')}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+          className="bg-[#1873e8] hover:bg-[#10b981] text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
         >
           Return to Home
         </button>

@@ -99,7 +99,7 @@ export function PullToRefresh({ children, onRefresh }) {
       {/* Content */}
       <div 
         className="transition-transform duration-200 ease-out h-full"
-        style={{ transform: `translateY(${pullDistance}px)` }}
+        style={{ transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : 'none' }}
       >
         {children}
       </div>

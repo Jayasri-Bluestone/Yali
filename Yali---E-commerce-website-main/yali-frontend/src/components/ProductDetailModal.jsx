@@ -238,7 +238,7 @@ export function ProductDetailModal({ product, isOpen, onClose, onAddToCart, onBu
                       }
                       onClose();
                     }}
-                    className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
+                    className="w-full py-4 bg-[#1873e8] hover:opacity-90 text-white rounded-xl font-semibold shadow-sm hover:shadow-xl transition-all flex items-center justify-center gap-2"
                   >
                     Buy Now
                   </button>
@@ -249,7 +249,7 @@ export function ProductDetailModal({ product, isOpen, onClose, onAddToCart, onBu
                       }
                       onClose();
                     }}
-                    className="w-full py-4 bg-gradient-to-r from-[#0066cc] to-[#10b981] text-white rounded-xl font-semibold hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
+                    className="w-full py-4 bg-[#10b981] hover:opacity-90 text-white rounded-xl font-semibold shadow-sm hover:shadow-xl transition-all flex items-center justify-center gap-2"
                   >
                     <ShoppingCart className="w-5 h-5" />
                     Add to Cart

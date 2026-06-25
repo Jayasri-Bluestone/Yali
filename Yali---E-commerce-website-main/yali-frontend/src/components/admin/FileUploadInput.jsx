@@ -38,19 +38,29 @@ export function FileUploadInput({
     setUploadError('');
 
     try {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        onChange(reader.result);
-        setMode('url');
-        setUploading(false);
-      };
-      reader.onerror = () => {
-        setUploadError('Failed to read file');
-        setUploading(false);
-      };
-      reader.readAsDataURL(file);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const authToken = token || localStorage.getItem('yali_token');
+      const res = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        headers: {
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        },
+        body: formData
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Upload failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      onChange(data.url);
+      setMode('url');
     } catch (err) {
-      setUploadError(err.message);
+      setUploadError(err.message || 'Upload failed. Please try again.');
+    } finally {
       setUploading(false);
     }
   };
