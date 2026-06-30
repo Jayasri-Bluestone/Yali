@@ -72,9 +72,8 @@ export function HeroBanner({ banners = [], onCategoryClick }) {
   };
 
   return (
-    <div className="relative w-[95%] max-w-[1300px] mx-auto mt-4 md:mt-8">
-
-      <div className="relative w-full h-[250px] md:h-[300px] lg:h-[380px] overflow-hidden rounded-[2rem] md:rounded-[3rem] shadow-xl bg-gradient-to-r from-[#031d59] to-[#004dc9] border border-[#70A83B]">
+    <div className="relative w-[95%] max-w-[1400px] mx-auto mt-2 md:mt-2 mb-2 md:mb-2">
+      <div className="relative w-full h-[250px] md:h-[350px] lg:h-[300px] overflow-hidden rounded-[2rem] shadow-xl bg-[#031d59]">
 
         {/* Exact Curved Green Background on the Right */}
         <div className="absolute inset-0 overflow-hidden z-0 pointer-events-none">
@@ -83,21 +82,21 @@ export function HeroBanner({ banners = [], onCategoryClick }) {
           </svg>
         </div>
 
-        <div className="absolute inset-0 flex flex-col md:flex-row">
+        <div className="absolute inset-0 flex flex-col md:flex-row max-w-[1400px] mx-auto w-full">
 
           {/* Left Side: Dynamic Text & Buttons */}
-          <div className="w-full md:w-[55%] h-full flex flex-col justify-center pl-10 pr-6 md:pl-20 md:pr-12 pt-8 md:pt-0 z-20 relative">
+          <div className="w-full md:w-[55%] h-full flex flex-col justify-center pl-8 md:pl-16 pr-6 md:pr-12 pt-8 md:pt-0 z-20 relative">
 
             {displayBanners.map((banner, index) => (
               <div
                 key={`text-${banner.id || index}`}
-                className={`absolute inset-0 flex flex-col justify-center pl-10 pr-6 md:pl-20 md:pr-12 transition-opacity duration-1000 pointer-events-none ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                className={`absolute inset-0 flex flex-col justify-center pl-8 md:pl-16 pr-6 md:pr-12 transition-opacity duration-1000 pointer-events-none ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
               >
                 <div className="pointer-events-auto flex flex-col items-start">
                   {/* Tagline Badge (Removed in new mockup) */}
 
                   {/* Main Heading */}
-                  <h1 className="text-2xl md:text-3xl lg:text-[40px] font-black text-white leading-[1.1] tracking-tight mb-3 text-left">
+                  <h1 className="text-3xl md:text-5xl lg:text-[50px] font-black text-white leading-[1.1] tracking-tight mb-4 text-left">
                     {banner.title ? (
                       <>
                         {banner.title.split(',')[0]}<br />
@@ -113,15 +112,14 @@ export function HeroBanner({ banners = [], onCategoryClick }) {
                     )}
                   </h1>
 
-                  {/* Subtitle */}
-                  <p className="text-gray-200 text-[12px] md:text-sm font-medium max-w-md mb-5 text-left">
+                  <p className="text-gray-200 text-sm md:text-lg font-medium max-w-md mb-4 text-left">
                     {banner.subtitle || 'Explore. Choose. Own. All your needs, in one trusted platform.'}
                   </p>
 
                   {/* CTA Button */}
                   <button
                     onClick={() => banner.link && navigate(banner.link)}
-                    className="bg-[#34982a] hover:bg-[#2c8123] text-white font-bold py-2 md:py-2.5 px-6 md:px-8 text-[13px] md:text-sm rounded-xl shadow-md transition-transform hover:scale-105 mb-4"
+                    className="bg-[#34982a] hover:bg-[#2c8123] text-white font-bold py-3 md:py-3 px-8 md:px-10 text-[15px] md:text-base rounded-xl shadow-md transition-transform hover:scale-105 mb-6"
                   >
                     {banner.buttonText || 'Shop Now'}
                   </button>
@@ -130,7 +128,7 @@ export function HeroBanner({ banners = [], onCategoryClick }) {
             ))}
 
             {/* Trust Badges - Keep static at the bottom */}
-            <div className="flex flex-wrap items-center gap-3 md:gap-6 mt-auto pb-4 md:pb-6 z-20">
+            <div className="flex flex-wrap items-center gap-4 md:gap-8 mt-auto pb-6 md:pb-10 pl-8 md:pl-16 z-20">
               <div className="flex items-center gap-2 md:gap-3">
                 <ShieldAlert className="w-5 h-5 md:w-7 md:h-7 text-[#70A83B]" strokeWidth={1.5} />
                 <div className="text-left">
@@ -177,32 +175,31 @@ export function HeroBanner({ banners = [], onCategoryClick }) {
 
         </div>
 
-        {/* Glassy Overlay for the Banner */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none z-30" />
+        {/* Removed Glassy Overlay to fix seam with header */}
 
         {/* 3. Slider Controls Overlay (Inside banner, glassy UI) */}
         <div className="absolute inset-0 z-40 pointer-events-none">
           <button
             onClick={prevSlide}
-            className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.1)] border border-white/30 rounded-full flex items-center justify-center transition-all hover:scale-110 pointer-events-auto text-white"
+            className="absolute left-4 md:left-2 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.1)] border border-white/30 rounded-full flex items-center justify-center transition-all hover:scale-110 pointer-events-auto text-white"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
 
           <button
             onClick={nextSlide}
-            className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.1)] border border-white/30 rounded-full flex items-center justify-center transition-all hover:scale-110 pointer-events-auto text-white"
+            className="absolute right-4 md:right-2 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md shadow-[0_4px_30px_rgba(0,0,0,0.1)] border border-white/30 rounded-full flex items-center justify-center transition-all hover:scale-110 pointer-events-auto text-white"
           >
             <ChevronRight className="w-6 h-6" />
           </button>
 
           {/* Dots */}
-          <div className="absolute bottom-6 md:bottom-8 left-1/2 md:left-[75%] -translate-x-1/2 flex gap-2 md:gap-3 pointer-events-auto">
+          <div className="absolute bottom-3 md:bottom-4 left-1/2 md:left-[75%] -translate-x-1/2 flex gap-2 md:gap-3 pointer-events-auto">
             {displayBanners.map((_, index) => (
               <button
                 key={index}
                 onClick={() => setCurrentSlide(index)}
-                className={`h-2 md:h-2.5 rounded-full transition-all duration-300 shadow-sm pointer-events-auto ${index === currentSlide ? 'bg-white w-8 md:w-12' : 'bg-white/40 w-2 md:w-3 hover:bg-white/70'
+                className={`h-2 md:h-2 rounded-full transition-all duration-300 shadow-sm pointer-events-auto ${index === currentSlide ? 'bg-white w-8 md:w-12' : 'bg-white/40 w-2 md:w-3 hover:bg-white/70'
                   }`}
               />
             ))}

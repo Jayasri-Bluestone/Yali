@@ -170,9 +170,11 @@ export function BikesTab() {
                       </td>
                       <td className="py-4 px-6">
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-black ${
+                          bike.approval_status === 'pending' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                          bike.approval_status === 'rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
                           bike.status === 'active' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-gray-100 text-gray-600 border border-gray-200'
                         }`}>
-                          {bike.status.toUpperCase()}
+                          {bike.approval_status === 'pending' ? 'PENDING' : bike.approval_status === 'rejected' ? 'REJECTED' : bike.status.toUpperCase()}
                         </span>
                         {meta.year && (
                           <div className="text-xs font-bold text-gray-500 mt-1">Model: {meta.year}</div>

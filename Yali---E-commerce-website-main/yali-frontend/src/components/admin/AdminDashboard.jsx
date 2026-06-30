@@ -42,6 +42,7 @@ import { useToast } from '../../context/ToastContext';
 
 // Import modular tab components
 import { DashboardTab } from './modules/Dashboard/DashboardTab';
+import { LiveDashboardTab } from './LiveDashboardTab';
 import { CustomersTab } from './modules/UserManagement/CustomersTab';
 import { VendorsTab } from './modules/UserManagement/VendorsTab';
 import { LocationsTab } from './modules/UserManagement/LocationsTab';
@@ -62,6 +63,7 @@ import { RevenueAnalyticsTab } from './modules/Dashboard/RevenueAnalyticsTab';
 import { SalesAnalyticsTab } from './modules/Dashboard/SalesAnalyticsTab';
 import { UserAnalyticsTab } from './modules/Dashboard/UserAnalyticsTab';
 import { RecentActivitiesTab } from './modules/Dashboard/RecentActivitiesTab';
+import { PendingApprovalsTab } from './modules/Dashboard/PendingApprovalsTab';
 import { DealersTab } from './modules/UserManagement/DealersTab';
 import { PropertyAgentsTab } from './modules/UserManagement/PropertyAgentsTab';
 import { StaffTab } from './modules/UserManagement/StaffTab';
@@ -236,18 +238,30 @@ export function AdminDashboard({
   // Filter lists based on role scope
   const filteredProducts = products.filter(p => {
     if (isVendor) return p.vendor_id === userData.id;
-    if (isCategoryAdmin) return p.category === adminCategory;
+    if (isCategoryAdmin) {
+      const pCat = (p.category || '').toLowerCase().replace(/[\s-]/g, '');
+      const aCat = (adminCategory || '').toLowerCase().replace(/[\s-]/g, '');
+      return pCat === aCat;
+    }
     return true; // Super admin sees all
   });
 
   const filteredOrders = orders.filter(o => {
     if (isVendor) return o.items && o.items.some(i => i.vendor_id === userData.id);
-    if (isCategoryAdmin) return o.category === adminCategory;
+    if (isCategoryAdmin) {
+      const oCat = (o.category || '').toLowerCase().replace(/[\s-]/g, '');
+      const aCat = (adminCategory || '').toLowerCase().replace(/[\s-]/g, '');
+      return oCat === aCat;
+    }
     return true; // Super admin sees all
   });
 
   const filteredBanners = banners.filter(b => {
-    if (isCategoryAdmin) return b.category === adminCategory;
+    if (isCategoryAdmin) {
+      const bCat = (b.category || '').toLowerCase().replace(/[\s-]/g, '');
+      const aCat = (adminCategory || '').toLowerCase().replace(/[\s-]/g, '');
+      return bCat === aCat;
+    }
     return true;
   });
 
@@ -266,6 +280,12 @@ export function AdminDashboard({
   const pendingOrdersCount = filteredOrders.filter(o => o.status === 'Pending').length;
   const lowStockCount = filteredProducts.filter(p => (p.stock || 0) < 5).length;
 
+  const canSeeCategory = (catName) => {
+    if (isSuperAdmin) return true;
+    if (userData?.managed_category === catName) return true;
+    return false;
+  };
+
   // Tab control lists based on roles
   const MENU_STRUCTURE = [
     {
@@ -274,6 +294,7 @@ export function AdminDashboard({
       show: true,
       items: [
         { id: 'dashboard', label: 'Overview', show: true },
+        { id: 'pending-approvals', label: 'Pending Approvals', show: isSuperAdmin },
         { id: 'revenue-analytics', label: 'Revenue Analytics', show: isSuperAdmin || isVendor },
         { id: 'sales-analytics', label: 'Sales Analytics', show: isSuperAdmin || isVendor },
         { id: 'user-analytics', label: 'User Analytics', show: userData?.role === 'admin' },
@@ -306,7 +327,7 @@ export function AdminDashboard({
     {
       group: 'Real Estate',
       icon: Home,
-      show: true,
+      show: canSeeCategory('real-estate'),
       items: [
         { id: 'property-listings', label: 'Property Listings', show: true },
         { id: 'residential', label: 'Residential', show: true },
@@ -321,7 +342,7 @@ export function AdminDashboard({
     {
       group: 'Automobiles',
       icon: Car,
-      show: true,
+      show: canSeeCategory('automobiles'),
       items: [
         { id: 'vehicle-listings', label: 'Vehicle Listings', show: true },
         { id: 'bikes', label: 'Bikes', show: true },
@@ -336,7 +357,7 @@ export function AdminDashboard({
     {
       group: 'Organic Products',
       icon: Leaf,
-      show: true,
+      show: canSeeCategory('organic-products'),
       items: [
         { id: 'organic-categories', label: 'Categories', show: true },
         { id: 'products', label: 'Product Listings', show: true },
@@ -349,7 +370,7 @@ export function AdminDashboard({
     {
       group: 'Dry Fruits',
       icon: Cookie,
-      show: true,
+      show: canSeeCategory('dry-fruits'),
       items: [
         { id: 'dryfruits-categories', label: 'Categories', show: true },
         { id: 'dryfruits-listings', label: 'Product Listings', show: true },
@@ -362,7 +383,7 @@ export function AdminDashboard({
     {
       group: 'Fashion & Apparel',
       icon: Shirt,
-      show: true,
+      show: canSeeCategory('fashion'),
       items: [
         { id: 'fashion-categories', label: 'Categories', show: true },
         { id: 'fashion-mens', label: "Men's Wear", show: true },
@@ -1089,17 +1110,10 @@ export function AdminDashboard({
 
           <Routes>
             <Route path="/admin/dashboard" element={
-              <DashboardTab
-                totalSales={totalSales}
-                totalOrdersCount={totalOrdersCount}
-                pendingOrdersCount={pendingOrdersCount}
-                lowStockCount={lowStockCount}
-                isVendor={isVendor}
-                filteredOrders={filteredOrders}
-                users={users}
-                filteredProducts={filteredProducts}
-              />
+              <LiveDashboardTab isVendor={isVendor} />
             } />
+
+            <Route path="/admin/pending-approvals" element={<PendingApprovalsTab />} />
 
             <Route path="/admin/reviews" element={
               <ReviewsTab />
@@ -1219,8 +1233,8 @@ export function AdminDashboard({
 
 
             <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="/admin/revenue-analytics" element={<RevenueAnalyticsTab />} />
-            <Route path="/admin/sales-analytics" element={<SalesAnalyticsTab />} />
+            <Route path="/admin/revenue-analytics" element={<RevenueAnalyticsTab token={token} userData={userData} isVendor={isVendor} />} />
+            <Route path="/admin/sales-analytics" element={<SalesAnalyticsTab token={token} userData={userData} isVendor={isVendor} />} />
             <Route path="/admin/user-analytics" element={<UserAnalyticsTab />} />
             <Route path="/admin/recent-activities" element={<RecentActivitiesTab />} />
             <Route path="/admin/dealers" element={<DealersTab />} />

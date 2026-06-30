@@ -1,9 +1,23 @@
 import { useState, useEffect } from 'react';
 import { ToggleSwitch } from "../../ToggleSwitch";
 import { API_URL } from "../../../../config";
-import { ShoppingCart, Heart, XCircle, Eye, Bookmark, Download } from 'lucide-react';
+import { ShoppingCart, Heart, XCircle, Eye, EyeOff, Bookmark, Download, Search, Filter } from 'lucide-react';
 import { exportToCSV } from "../../../../utils/csvExport";
 import { Pagination } from "../../Pagination";
+
+const PasswordDisplay = ({ password }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono mt-1 bg-gray-50 p-1 rounded border border-gray-100 max-w-[180px]">
+      <span className="truncate mr-2">
+        PWD: {show ? password : '••••••••••••••••'}
+      </span>
+      <button onClick={() => setShow(!show)} className="hover:text-gray-600 focus:outline-none" title={show ? "Hide Password" : "Show Password"}>
+        {show ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+      </button>
+    </div>
+  );
+};
 
 export function CustomersTab({
   users,
@@ -18,10 +32,25 @@ export function CustomersTab({
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
   
-  const filteredUsers = users.filter(u => u.role === 'customer');
+  const filteredUsers = users.filter(u => {
+    if (u.role !== 'customer') return false;
+    const searchString = `${u.name || ''} ${u.email || ''} ${u.phone || ''}`.toLowerCase();
+    const matchesSearch = searchString.includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'All' || 
+                          (statusFilter === 'Active' && u.status === 'active') ||
+                          (statusFilter === 'Inactive' && u.status !== 'active');
+    return matchesSearch && matchesStatus;
+  });
+
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
   const currentItems = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
 
   useEffect(() => {
     if (!token) return;
@@ -37,16 +66,40 @@ export function CustomersTab({
   }, [token]);
   return (
     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-xl font-bold text-gray-950">Registered Customer Directory</h2>
-        <button
-          onClick={() => exportToCSV(filteredUsers, 'customers')}
-          className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] rounded-lg border border-gray-200 transition-colors text-sm font-semibold"
-          title="Export Customers to CSV"
-        >
-          <Download className="w-4 h-4" />
-          Export
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search customers..."
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] transition-all bg-gray-50"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="relative w-full sm:w-48">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <select
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] transition-all bg-gray-50 appearance-none cursor-pointer"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="All">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+          <button
+            onClick={() => exportToCSV(filteredUsers, 'customers')}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-white text-[#0066cc] hover:bg-blue-50 rounded-xl border border-blue-200 transition-colors text-sm font-bold"
+            title="Export Customers to CSV"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-sm">
@@ -72,7 +125,15 @@ export function CustomersTab({
                   </td>
                   <td className="p-4">
                     <div>{u.email}</div>
-                    <div className="text-xs text-gray-500">{u.phone || 'No phone'}</div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <div className="text-xs text-gray-500">{u.phone || 'No phone'}</div>
+                      {u.date_of_birth && (
+                        <div className="text-[10px] text-gray-400 font-medium bg-gray-100 px-1.5 py-0.5 rounded">
+                          DOB: {new Date(u.date_of_birth).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                    {u.password && <PasswordDisplay password={u.password} />}
                   </td>
                   <td className="p-4 font-semibold text-gray-950">₹{(u.wallet || 0).toFixed(2)}</td>
                   <td className="p-4">

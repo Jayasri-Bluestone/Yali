@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Package, ChevronDown, ChevronUp, MapPin, Phone, CreditCard, Box, Truck, CheckCircle, Clock, Link as LinkIcon, Send } from 'lucide-react';
+import { Package, ChevronDown, ChevronUp, MapPin, Phone, CreditCard, Box, Truck, CheckCircle, Clock, Link as LinkIcon, Send, Search, Download } from 'lucide-react';
 import { formatINR } from '../../../../utils/currency';
+import { exportToCSV } from '../../../../utils/csvExport';
+import { Pagination } from '../../Pagination';
 import { API_URL } from '../../../../config';
 
 const STATUS_OPTIONS = [
@@ -17,6 +19,19 @@ export function OrdersTable({ orders, onStatusChange, title, subtitle }) {
   const [expandedRow, setExpandedRow] = useState(null);
   const [deliveryPartners, setDeliveryPartners] = useState([]);
   const [trackingForms, setTrackingForms] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const filteredOrders = orders?.filter(order => {
+    const searchString = `${order.order_id || ''} ${order.customer_name || ''} ${order.customer_email || ''}`.toLowerCase();
+    return searchString.includes(searchTerm.toLowerCase());
+  }) || [];
+
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  useEffect(() => setCurrentPage(1), [searchTerm]);
 
   useEffect(() => {
     const fetchPartners = async () => {
@@ -84,12 +99,30 @@ export function OrdersTable({ orders, onStatusChange, title, subtitle }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-fade-in">
-      {(title || subtitle) && (
-        <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+      <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
           {title && <h2 className="text-xl font-black text-gray-900 tracking-tight">{title}</h2>}
           {subtitle && <p className="text-sm text-gray-500 font-medium mt-1">{subtitle}</p>}
         </div>
-      )}
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search orders..."
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] transition-all bg-white"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={() => exportToCSV(filteredOrders, 'orders')}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-white text-gray-700 hover:bg-gray-50 hover:text-[#0066cc] rounded-xl border border-gray-200 transition-colors text-sm font-bold shadow-sm"
+          >
+            <Download className="w-4 h-4" /> Export
+          </button>
+        </div>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
@@ -105,7 +138,7 @@ export function OrdersTable({ orders, onStatusChange, title, subtitle }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {orders.map((order) => {
+            {paginatedOrders.map((order) => {
               const isExpanded = expandedRow === order.order_id;
               
               return (
@@ -340,6 +373,18 @@ export function OrdersTable({ orders, onStatusChange, title, subtitle }) {
           </tbody>
         </table>
       </div>
+
+      {filteredOrders.length > 0 && (
+        <div className="border-t border-gray-200 p-2">
+          <Pagination 
+            currentPage={currentPage} 
+            totalPages={totalPages} 
+            onPageChange={setCurrentPage} 
+            itemsPerPage={itemsPerPage} 
+            onItemsPerPageChange={setItemsPerPage} 
+          />
+        </div>
+      )}
     </div>
   );
 }

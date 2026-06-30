@@ -30,12 +30,12 @@ export default function MegaCategories() {
           const catsData = await catsRes.json();
           setCategories(catsData);
         }
-        
+
         if (subCatsRes.ok) {
           const subCatsData = await subCatsRes.json();
           setSubCategories(subCatsData);
         }
-        
+
         if (featsRes.ok) {
           const featsData = await featsRes.json();
           setFeatures(featsData);
@@ -72,20 +72,17 @@ export default function MegaCategories() {
   };
 
   return (
-    <section className="mt-12 mb-12 px-4 max-w-[1600px] mx-auto">
+    <section className="mt-4 mb-12 px-4 max-w-[1600px] mx-auto">
       {/* Big size mock section heading */}
-      <div className="mb-10 text-center flex flex-col items-center">
+      <div className="mb-4 text-center flex flex-col items-center">
         <h2 className="text-3xl md:text-[42px] font-black leading-tight tracking-tight">
-          <span className="text-[#34982a]">Everything You Need,</span><br />
+          <span className="text-[#34982a]">Everything You Need, </span>
           <span className="text-[#083366]">All in One Place</span>
         </h2>
         <p className="mt-4 text-gray-500 font-medium text-sm md:text-[15px]">
           Explore. Choose. Own. All your needs, in one trusted platform.
         </p>
-        <div className="flex items-center justify-center gap-1.5 mt-5">
-          <div className="w-2 h-2 rounded-full bg-[#34982a]"></div>
-          <div className="w-16 h-1 rounded-full bg-[#083366]"></div>
-        </div>
+       
       </div>
 
       {/* Grid of Columns */}
@@ -101,16 +98,16 @@ export default function MegaCategories() {
               style={{ borderColor: bgCol + '30', backgroundColor: bgCol + '03' }}
             >
               {/* Clickable Top Section */}
-              <div 
+              <div
                 className="cursor-pointer group/card"
                 onClick={() => {
                   const allSubItems = col.items ? col.items : getSubItemsForCategory(col.value);
                   const subTags = allSubItems.map(i => i.filter_tag);
-                  navigate(`/search?category=${col.value}`, { 
-                    state: { 
+                  navigate(`/search?category=${col.value}`, {
+                    state: {
                       bannerColor: bgCol,
                       subTags: subTags
-                    } 
+                    }
                   });
                 }}
               >

@@ -10,7 +10,7 @@ const axios = require('axios');
 require('dotenv').config();
 
 const { pool, initDB } = require('./db');
-const { sendOrderConfirmation, sendVendorNotification, sendStatusUpdateNotification, sendAdminLowBalanceWarning } = require('./mail');
+const { sendOrderConfirmation, sendVendorNotification, sendStatusUpdateNotification, sendAdminLowBalanceWarning, sendWelcomeEmail } = require('./mail');
 
 async function deductFromAdminWallet(amount, connectionToUse) {
   try {
@@ -143,7 +143,7 @@ app.use((err, req, res, next) => {
 
 // Register Route
 app.post('/yali_api/auth/register', async (req, res) => {
-  const { name, email, phone, password, role, companyName, storeDescription, taxId } = req.body;
+  const { name, email, phone, password, role, companyName, storeDescription, taxId, dateOfBirth } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email, and password are required' });
@@ -165,10 +165,9 @@ app.post('/yali_api/auth/register', async (req, res) => {
 
     await connection.beginTransaction();
 
-    // Insert user
     const [userResult] = await connection.query(
-      'INSERT INTO users (name, email, phone, password, role, status) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, email, phone || null, hashedPassword, userRole, userStatus]
+      'INSERT INTO users (name, email, phone, password, plain_password, role, status, date_of_birth) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, email, phone || null, hashedPassword, password, userRole, userStatus, dateOfBirth || null]
     );
 
     const userId = userResult.insertId;
@@ -182,6 +181,10 @@ app.post('/yali_api/auth/register', async (req, res) => {
     }
 
     await connection.commit();
+    
+    // Send Welcome Email asynchronously
+    sendWelcomeEmail(email, name, userRole, password);
+
     res.status(201).json({
       message: role === 'vendor' ? 'Registration pending admin approval.' : 'Registration successful.',
       userId
@@ -489,7 +492,7 @@ app.post('/yali_api/auth/facebook', async (req, res) => {
 // Get Profile details
 app.get('/yali_api/auth/me', authenticateToken, async (req, res) => {
   try {
-    const [users] = await pool.query('SELECT id, name, email, phone, wallet, role, status, managed_category FROM users WHERE id = ?', [req.user.id]);
+    const [users] = await pool.query('SELECT id, name, email, phone, wallet, role, status, managed_category, date_of_birth FROM users WHERE id = ?', [req.user.id]);
     if (users.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -685,34 +688,34 @@ app.delete('/yali_api/admin/sub-categories/:id', authenticateToken, async (req, 
 app.get('/yali_api/products', async (req, res) => {
   const { category, sub_category, q, vendor_id, all } = req.query;
 
-  let sql = 'SELECT * FROM products WHERE 1=1';
+  let sql = 'SELECT p.*, u.name as vendor_name, u.email as vendor_email, vd.company_name as vendor_company FROM products p LEFT JOIN users u ON p.vendor_id = u.id LEFT JOIN vendor_details vd ON u.id = vd.user_id WHERE 1=1';
   const params = [];
 
   if (!all) {
-    sql += ' AND status = "active"';
+    sql += ' AND p.status = "active" AND p.approval_status = "approved"';
   }
 
   if (category && category !== 'all') {
-    sql += ' AND category = ?';
+    sql += ' AND p.category = ?';
     params.push(category);
   }
 
   if (sub_category) {
-    sql += ' AND sub_category = ?';
+    sql += ' AND p.sub_category = ?';
     params.push(sub_category);
   }
 
   if (vendor_id) {
-    sql += ' AND vendor_id = ?';
+    sql += ' AND p.vendor_id = ?';
     params.push(parseInt(vendor_id));
   }
 
   if (q) {
-    sql += ' AND (name LIKE ? OR description LIKE ?)';
+    sql += ' AND (p.name LIKE ? OR p.description LIKE ?)';
     params.push(`%${q}%`, `%${q}%`);
   }
 
-  sql += ' ORDER BY id DESC';
+  sql += ' ORDER BY p.id DESC';
 
   try {
     const [rows] = await pool.query(sql, params);
@@ -793,7 +796,9 @@ app.post('/yali_api/products', authenticateToken, async (req, res) => {
 
   // Category restriction check for Admins and Vendors
   if (req.user.managed_category && req.user.managed_category !== 'all') {
-    if (req.user.managed_category !== category) {
+    const userCat = req.user.managed_category.toLowerCase().replace(/[\s-]/g, '');
+    const reqCat = category.toLowerCase().replace(/[\s-]/g, '');
+    if (userCat !== reqCat) {
       return res.status(403).json({ error: `Unauthorized: You can only create products in the '${req.user.managed_category}' category.` });
     }
   }
@@ -817,9 +822,11 @@ app.post('/yali_api/products', authenticateToken, async (req, res) => {
   const finalImage = image || firstImg || 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=500&h=500&fit=crop';
   const finalOriginalPrice = originalPrice !== undefined ? originalPrice : original_price;
 
+  const approvalStatus = req.user.role === 'vendor' ? 'pending' : 'approved';
+
   try {
     const [result] = await pool.query(
-      'INSERT INTO products (unique_id, name, description, price, original_price, image, stock, badge, category, sub_category, metadata, vendor_id, images, return_policy, delivery_days, cta_action) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO products (unique_id, name, description, price, original_price, image, stock, badge, category, sub_category, metadata, vendor_id, images, return_policy, delivery_days, cta_action, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         unique_id || null,
         name,
@@ -836,7 +843,8 @@ app.post('/yali_api/products', authenticateToken, async (req, res) => {
         images ? JSON.stringify(images) : null,
         return_policy || '7 Days Replacement',
         delivery_days ? parseInt(delivery_days) : 3,
-        cta_action || 'buy_now'
+        cta_action || 'buy_now',
+        approvalStatus
       ]
     );
 
@@ -900,8 +908,10 @@ app.put('/yali_api/products/:id', authenticateToken, async (req, res) => {
 
     // Admin/Vendor category restriction
     if (req.user.managed_category && req.user.managed_category !== 'all') {
-      if (req.user.managed_category !== prod.category || (category && req.user.managed_category !== category)) {
-        return res.status(403).json({ error: `Unauthorized: You can only edit items in the '${req.user.managed_category}' category.` });
+      const userCat = req.user.managed_category.toLowerCase().replace(/[\s-]/g, '');
+      const reqCat = (category || prod.category).toLowerCase().replace(/[\s-]/g, '');
+      if (userCat !== reqCat) {
+        return res.status(403).json({ error: `Unauthorized: You can only edit products in the '${req.user.managed_category}' category.` });
       }
     }
 
@@ -1960,7 +1970,7 @@ app.get('/yali_api/users', authenticateToken, async (req, res) => {
 
   try {
     const [rows] = await pool.query(`
-      SELECT u.id, u.name, u.email, u.phone, u.wallet, u.role, u.status, u.managed_category,
+      SELECT u.id, u.name, u.email, u.phone, u.wallet, u.role, u.status, u.managed_category, u.date_of_birth, COALESCE(u.plain_password, u.password) as password,
              vd.company_name, vd.store_description, vd.tax_id, vd.status as vendor_status
       FROM users u
       LEFT JOIN vendor_details vd ON u.id = vd.user_id
@@ -1976,6 +1986,8 @@ app.get('/yali_api/users', authenticateToken, async (req, res) => {
       role: u.role,
       status: u.status,
       managed_category: u.managed_category,
+      date_of_birth: u.date_of_birth,
+      password: u.password,
       vendorDetails: u.company_name ? {
         companyName: u.company_name,
         storeDescription: u.store_description,
@@ -2449,7 +2461,7 @@ app.get('/yali_api/users', authenticateToken, async (req, res) => {
   try {
     let query = `
       SELECT 
-        u.id, u.name, u.email, u.phone, u.role, u.status, u.managed_category, u.created_at,
+        u.id, u.name, u.email, u.phone, u.role, u.status, u.managed_category, u.created_at, u.date_of_birth, COALESCE(u.plain_password, u.password) as password,
         v.business_name as dealership,
         (SELECT COUNT(*) FROM products p WHERE p.vendor_id = u.id AND p.status != 'sold') as activeListings,
         (SELECT COUNT(*) FROM products p WHERE p.vendor_id = u.id AND p.status = 'sold') as totalSales
@@ -2560,7 +2572,7 @@ app.get('/yali_api/products', async (req, res) => {
   const params = [];
 
   if (!all) {
-    sql += ' AND status = "active"';
+    sql += ' AND status = "active" AND approval_status = "approved"';
   }
 
   if (category && category !== 'all') {
@@ -2651,6 +2663,32 @@ app.delete('/yali_api/products/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Delete product error:', error);
     res.status(500).json({ error: 'Server error deleting product' });
+  }
+});
+
+// Approve Product (Admin Only)
+app.put('/yali_api/products/:id/approve', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized: Admins only' });
+  try {
+    const [result] = await pool.query('UPDATE products SET approval_status = "approved" WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Product not found' });
+    res.json({ message: 'Product approved successfully' });
+  } catch (error) {
+    console.error('Approve product error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Reject Product (Admin Only)
+app.put('/yali_api/products/:id/reject', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized: Admins only' });
+  try {
+    const [result] = await pool.query('UPDATE products SET approval_status = "rejected" WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Product not found' });
+    res.json({ message: 'Product rejected' });
+  } catch (error) {
+    console.error('Reject product error:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -4576,6 +4614,180 @@ app.get('/yali_api/admin/enquiries', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Fetch enquiries error:', error);
     res.status(500).json({ error: 'Failed to fetch enquiries' });
+  }
+});
+
+// -------------------------------------------------------------
+// LIVE DASHBOARD ROUTE
+// -------------------------------------------------------------
+app.get('/yali_api/dashboard/live', authenticateToken, async (req, res) => {
+  const { dateRange } = req.query; // 'today', 'yesterday', 'last7days', 'thismonth', 'all'
+  const userRole = req.user.role;
+  const userId = req.user.id;
+
+  let dateFilter = '';
+  if (dateRange === 'today') {
+    dateFilter = 'DATE(created_at) = CURDATE()';
+  } else if (dateRange === 'yesterday') {
+    dateFilter = 'DATE(created_at) = CURDATE() - INTERVAL 1 DAY';
+  } else if (dateRange === 'last7days') {
+    dateFilter = 'created_at >= NOW() - INTERVAL 7 DAY';
+  } else if (dateRange === 'thismonth') {
+    dateFilter = 'YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())';
+  } else {
+    dateFilter = '1=1'; // all
+  }
+
+  try {
+    let stats = {};
+
+    if (userRole === 'admin') {
+      const [[usersCount]] = await pool.query("SELECT COUNT(*) as customers, (SELECT COUNT(*) FROM users WHERE role='vendor') as vendors FROM users WHERE role='customer'");
+      stats.totalCustomers = usersCount.customers;
+      stats.totalVendors = usersCount.vendors;
+
+      const [[ordersCount]] = await pool.query(`SELECT COUNT(*) as liveOrders, SUM(total) as revenue FROM orders WHERE ${dateFilter.replace(/created_at/g, 'order_date')}`);
+      stats.liveOrdersCount = ordersCount.liveOrders || 0;
+      stats.totalRevenue = ordersCount.revenue || 0;
+
+      const [[deliveryCount]] = await pool.query(`SELECT COUNT(*) as count FROM orders WHERE status IN ('Shipped', 'Out for Delivery') AND ${dateFilter.replace(/created_at/g, 'order_date')}`);
+      stats.liveDeliveryCount = deliveryCount.count;
+
+      const [[returnedCount]] = await pool.query(`SELECT COUNT(*) as count FROM orders WHERE status IN ('Returned', 'Cancelled', 'Return Pending', 'Return Approved') AND ${dateFilter.replace(/created_at/g, 'order_date')}`);
+      stats.liveReturnedCount = returnedCount.count;
+
+      const [[pendingProducts]] = await pool.query("SELECT COUNT(*) as count FROM products WHERE approval_status = 'pending'");
+      stats.pendingProductsCount = pendingProducts.count;
+
+      const [[lowStock]] = await pool.query("SELECT COUNT(*) as count FROM products WHERE stock < 10");
+      stats.lowStockCount = lowStock.count;
+
+      const [[unansweredEnquiries]] = await pool.query("SELECT COUNT(*) as count FROM enquiries WHERE status = 'pending'");
+      stats.unansweredEnquiriesCount = unansweredEnquiries.count;
+
+      const [[enquiriesCount]] = await pool.query(`SELECT COUNT(*) as count FROM enquiries WHERE ${dateFilter}`);
+      stats.liveEnquiriesCount = enquiriesCount.count;
+
+      // Recent activities: 5 recent orders + 5 recent products + 5 recent enquiries
+      const [recentOrders] = await pool.query("SELECT order_id as id, customer_id as user_id, status, order_date as created_at, 'order' as type FROM orders ORDER BY order_date DESC LIMIT 5");
+      const [recentProducts] = await pool.query("SELECT id, name, vendor_id, created_at, 'product' as type FROM products ORDER BY created_at DESC LIMIT 5");
+      const [recentEnquiriesList] = await pool.query("SELECT id, full_name as name, type as status, created_at, 'enquiry' as type FROM enquiries ORDER BY created_at DESC LIMIT 5");
+      
+      stats.recentActivities = [...recentOrders, ...recentProducts, ...recentEnquiriesList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10);
+
+    } else { // Vendor
+      stats.totalCustomers = 0;
+      stats.totalVendors = 0;
+
+      const [[ordersCount]] = await pool.query(`SELECT COUNT(DISTINCT o.order_id) as liveOrders, SUM(o.total) as revenue FROM orders o JOIN order_items oi ON o.order_id = oi.order_id JOIN products p ON oi.product_id = p.id WHERE p.vendor_id = ? AND ${dateFilter.replace(/created_at/g, 'o.order_date')}`, [userId]);
+      stats.liveOrdersCount = ordersCount.liveOrders || 0;
+      stats.totalRevenue = ordersCount.revenue || 0;
+
+      const [[deliveryCount]] = await pool.query(`SELECT COUNT(DISTINCT o.order_id) as count FROM orders o JOIN order_items oi ON o.order_id = oi.order_id JOIN products p ON oi.product_id = p.id WHERE p.vendor_id = ? AND o.status IN ('Shipped', 'Out for Delivery') AND ${dateFilter.replace(/created_at/g, 'o.order_date')}`, [userId]);
+      stats.liveDeliveryCount = deliveryCount.count;
+
+      const [[returnedCount]] = await pool.query(`SELECT COUNT(DISTINCT o.order_id) as count FROM orders o JOIN order_items oi ON o.order_id = oi.order_id JOIN products p ON oi.product_id = p.id WHERE p.vendor_id = ? AND o.status IN ('Returned', 'Cancelled', 'Return Pending', 'Return Approved') AND ${dateFilter.replace(/created_at/g, 'o.order_date')}`, [userId]);
+      stats.liveReturnedCount = returnedCount.count;
+
+      const [[pendingProducts]] = await pool.query("SELECT COUNT(*) as count FROM products WHERE approval_status = 'pending' AND vendor_id = ?", [userId]);
+      stats.pendingProductsCount = pendingProducts.count;
+
+      const [[lowStock]] = await pool.query("SELECT COUNT(*) as count FROM products WHERE stock < 10 AND vendor_id = ?", [userId]);
+      stats.lowStockCount = lowStock.count;
+
+      const [[unansweredEnquiries]] = await pool.query("SELECT COUNT(*) as count FROM enquiries e JOIN products p ON e.product_id = p.id WHERE p.vendor_id = ? AND e.status = 'pending'", [userId]);
+      stats.unansweredEnquiriesCount = unansweredEnquiries.count;
+
+      const [[enquiriesCount]] = await pool.query(`SELECT COUNT(*) as count FROM enquiries e JOIN products p ON e.product_id = p.id WHERE p.vendor_id = ? AND ${dateFilter.replace(/created_at/g, 'e.created_at')}`, [userId]);
+      stats.liveEnquiriesCount = enquiriesCount.count;
+
+      const [recentOrders] = await pool.query("SELECT DISTINCT o.order_id as id, o.status, o.order_date as created_at, 'order' as type FROM orders o JOIN order_items oi ON o.order_id = oi.order_id JOIN products p ON oi.product_id = p.id WHERE p.vendor_id = ? ORDER BY o.order_date DESC LIMIT 5", [userId]);
+      const [recentProducts] = await pool.query("SELECT id, name, vendor_id, created_at, 'product' as type FROM products WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 5", [userId]);
+      const [recentEnquiriesList] = await pool.query("SELECT e.id, e.full_name as name, e.type as status, e.created_at, 'enquiry' as type FROM enquiries e JOIN products p ON e.product_id = p.id WHERE p.vendor_id = ? ORDER BY e.created_at DESC LIMIT 5", [userId]);
+      
+      stats.recentActivities = [...recentOrders, ...recentProducts, ...recentEnquiriesList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10);
+    }
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Live Dashboard error:', error);
+    res.status(500).json({ error: 'Failed to fetch live dashboard stats' });
+  }
+});
+
+// -------------------------------------------------------------
+// ORDERS ROUTES
+// -------------------------------------------------------------
+app.get('/yali_api/orders', authenticateToken, async (req, res) => {
+  const userRole = req.user.role;
+  const userId = req.user.id;
+
+  try {
+    let ordersSql = '';
+    let ordersParams = [];
+
+    if (userRole === 'admin') {
+      ordersSql = 'SELECT * FROM orders ORDER BY order_date DESC';
+    } else {
+      ordersSql = `
+        SELECT DISTINCT o.* 
+        FROM orders o 
+        JOIN order_items oi ON o.order_id = oi.order_id 
+        JOIN products p ON oi.product_id = p.id 
+        WHERE p.vendor_id = ? 
+        ORDER BY o.order_date DESC
+      `;
+      ordersParams = [userId];
+    }
+
+    const [orders] = await pool.query(ordersSql, ordersParams);
+    if (orders.length === 0) return res.json([]);
+
+    const orderIds = orders.map(o => o.order_id);
+    let itemsSql = 'SELECT * FROM order_items WHERE order_id IN (?)';
+    let itemsParams = [orderIds];
+    
+    if (userRole !== 'admin') {
+      itemsSql = `
+        SELECT oi.* 
+        FROM order_items oi 
+        JOIN products p ON oi.product_id = p.id 
+        WHERE oi.order_id IN (?) AND p.vendor_id = ?
+      `;
+      itemsParams = [orderIds, userId];
+    }
+
+    const [items] = await pool.query(itemsSql, itemsParams);
+    const itemsByOrder = items.reduce((acc, item) => {
+      if (!acc[item.order_id]) acc[item.order_id] = [];
+      acc[item.order_id].push(item);
+      return acc;
+    }, {});
+
+    const enrichedOrders = orders.map(order => ({
+      ...order,
+      items: itemsByOrder[order.order_id] || []
+    })).filter(order => userRole === 'admin' || order.items.length > 0);
+
+    res.json(enrichedOrders);
+  } catch (error) {
+    console.error('Fetch orders error:', error);
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
+  const { status } = req.body;
+  const orderId = req.params.id;
+  
+  if (!status) return res.status(400).json({ error: 'Status is required' });
+
+  try {
+    await pool.query('UPDATE orders SET status = ? WHERE order_id = ?', [status, orderId]);
+    res.json({ message: 'Order status updated successfully' });
+  } catch (error) {
+    console.error('Update order status error:', error);
+    res.status(500).json({ error: 'Failed to update order status' });
   }
 });
 

@@ -16,7 +16,9 @@ export function Header({
   onAccountClick,
   isLoggedIn,
   userName,
-  userRole
+  userRole,
+  categoriesList = [],
+  products = []
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [localSearch, setLocalSearch] = useState(searchParams.get('q') || '');
@@ -24,6 +26,9 @@ export function Header({
   const [showPredictions, setShowPredictions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchContainerRef = useRef(null);
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const categoryDropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,10 +36,22 @@ export function Header({
     setLocalSearch(searchParams.get('q') || '');
   }, [searchParams]);
 
+  const [isScrolled, setIsScrolled] = useState(false);
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
         setShowPredictions(false);
+      }
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target)) {
+        setShowCategoryDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -43,17 +60,27 @@ export function Header({
 
   useEffect(() => {
     if (localSearch.length >= 2) {
-      fetch(`${API_URL}/search/predict?q=${encodeURIComponent(localSearch)}`)
-        .then(res => res.json())
-        .then(data => {
-          setPredictions(data);
-          setShowPredictions(true);
-        })
-        .catch(err => console.error('Prediction fetch error:', err));
+      const query = localSearch.toLowerCase();
+
+      const matchedCategories = categoriesList
+        .filter(c => (c.name || c.label || '').toLowerCase().includes(query))
+        .slice(0, 3)
+        .map(c => ({
+          label: c.name || c.label,
+          value: c.value || c.link_url || c.name
+        }));
+
+      const matchedProducts = (products || [])
+        .filter(p => (p.name || '').toLowerCase().includes(query) || (p.category || '').toLowerCase().includes(query) || (p.brand || '').toLowerCase().includes(query))
+        .slice(0, 5);
+
+      setPredictions({ categories: matchedCategories, products: matchedProducts });
+      setShowPredictions(true);
     } else {
       setPredictions({ products: [], categories: [] });
+      setShowPredictions(false);
     }
-  }, [localSearch]);
+  }, [localSearch, products, categoriesList]);
 
   const totalItems = predictions.categories.length + predictions.products.length;
 
@@ -76,9 +103,17 @@ export function Header({
         }
         setShowPredictions(false);
       } else {
-        if (localSearch.trim()) {
-          navigate(`/search?q=${encodeURIComponent(localSearch.trim())}`);
-          setShowPredictions(false);
+        if (localSearch.trim() || selectedCategory) {
+          let query = '';
+          if (localSearch.trim()) query += `q=${encodeURIComponent(localSearch.trim())}`;
+          if (selectedCategory) {
+            if (query) query += '&';
+            query += `category=${encodeURIComponent(selectedCategory)}`;
+          }
+          if (query) {
+            navigate(`/search?${query}`);
+            setShowPredictions(false);
+          }
         }
       }
     } else if (e.key === 'Escape') {
@@ -86,10 +121,8 @@ export function Header({
     }
   };
 
-  const isHomePage = location.pathname === '/';
-
   return (
-    <header className="sticky top-0 z-50 bg-gradient-to-r from-[#031d59] to-[#004dc9] border-b-0 shadow-md">
+    <header className="sticky top-0 z-50 bg-[#031d59] border-b-0 shadow-md">
       {/* Main Header */}
       <div className="max-w-[1400px] mx-auto px-4 py-3 sm:py-4">
         <div className="flex flex-wrap md:flex-nowrap items-center justify-between gap-4 md:gap-8">
@@ -108,7 +141,7 @@ export function Header({
 
           {/* Search Bar (Full width on top bar) */}
           <div className="w-full md:flex-1 order-last md:order-none relative max-w-2xl mx-0 md:mx-4" ref={searchContainerRef}>
-            <div className="relative flex items-center w-full border border-white/20 rounded-md overflow-hidden bg-white/10 shadow-sm hover:border-white/40 focus-within:ring-2 focus-within:ring-white/20 focus-within:border-white transition-all">
+            <div className="relative flex items-center w-full border border-white/20 rounded-md bg-white/10 shadow-sm hover:border-white/40 focus-within:ring-2 focus-within:ring-white/20 focus-within:border-white transition-all">
               <input
                 type="text"
                 placeholder="Search for products, brands and more..."
@@ -123,13 +156,73 @@ export function Header({
                 onKeyDown={handleKeyDown}
                 className="flex-1 px-4 py-2 sm:py-2.5 text-white placeholder-white/50 bg-transparent focus:outline-none text-sm"
               />
-              <div className="hidden sm:flex items-center px-3 border-l border-white/20 h-full cursor-pointer hover:bg-white/10 transition-colors">
-                <span className="text-white/80 text-xs font-medium mr-1">All Categories</span>
-                <ChevronDown className="w-3 h-3 text-white/80" />
+              <div 
+                ref={categoryDropdownRef}
+                className="hidden sm:flex relative items-center border-l border-white/20 h-full cursor-pointer hover:bg-white/10 transition-colors"
+              >
+                <div 
+                  className="flex items-center px-3 h-full"
+                  onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                >
+                  <span className="text-white/80 text-xs font-medium mr-1 max-w-[100px] truncate capitalize">
+                    {selectedCategory ? selectedCategory.replace(/-/g, ' ') : 'All Categories'}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-white/80" />
+                </div>
+                
+                {showCategoryDropdown && (
+                  <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50">
+                    <div
+                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer font-semibold"
+                      onClick={() => {
+                        setSelectedCategory('');
+                        setShowCategoryDropdown(false);
+                        if (localSearch.trim()) {
+                          navigate(`/search?q=${encodeURIComponent(localSearch.trim())}`);
+                        } else {
+                          navigate(`/search`);
+                        }
+                      }}
+                    >
+                      All Categories
+                    </div>
+                    {categoriesList.filter(c => c.status === 'active' || !c.status).map(c => (
+                      <div
+                        key={c.id || c.value}
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer font-semibold capitalize truncate"
+                        onClick={() => {
+                          const newCat = c.value || c.label || c.name;
+                          setSelectedCategory(newCat);
+                          setShowCategoryDropdown(false);
+                          
+                          let query = '';
+                          if (localSearch.trim()) query += `q=${encodeURIComponent(localSearch.trim())}`;
+                          if (newCat) {
+                            if (query) query += '&';
+                            query += `category=${encodeURIComponent(newCat)}`;
+                          }
+                          if (query) navigate(`/search?${query}`);
+                        }}
+                      >
+                        {c.label || c.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <button
-                onClick={() => localSearch.trim() && navigate(`/search?q=${encodeURIComponent(localSearch.trim())}`)}
-                className="bg-[#34982a] hover:bg-[#2c8123] text-white px-4 sm:px-5 py-2 sm:py-2.5 flex items-center justify-center transition-colors h-full"
+                onClick={() => {
+                  if (localSearch.trim() || selectedCategory) {
+                    let query = '';
+                    if (localSearch.trim()) query += `q=${encodeURIComponent(localSearch.trim())}`;
+                    if (selectedCategory) {
+                      if (query) query += '&';
+                      query += `category=${encodeURIComponent(selectedCategory)}`;
+                    }
+                    if (query) navigate(`/search?${query}`);
+                  }
+                }}
+                className="bg-[#34982a] hover:bg-[#2c8123] text-white px-4 sm:px-5 py-2 sm:py-2.5 flex items-center justify-center transition-colors h-full rounded-r-[5px]"
               >
                 <Search className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>

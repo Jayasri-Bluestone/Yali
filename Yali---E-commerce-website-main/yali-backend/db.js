@@ -52,8 +52,10 @@ async function initDB() {
     try {
       await connection.query("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) DEFAULT 'customer'");
       await connection.query("ALTER TABLE users ADD COLUMN department VARCHAR(100) NULL");
+      await connection.query("ALTER TABLE users ADD COLUMN date_of_birth DATE NULL");
+      await connection.query("ALTER TABLE users ADD COLUMN plain_password VARCHAR(255) NULL");
     } catch(e) {
-      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not modify role or add department to users:', e.message);
+      if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not modify role or add columns to users:', e.message);
     }
 
     // 2. Create Vendor Details Table
@@ -148,6 +150,7 @@ async function initDB() {
         reviews_count INT DEFAULT 0,
         vendor_id INT NULL,
         status ENUM('active', 'inactive') DEFAULT 'active',
+        approval_status VARCHAR(50) DEFAULT 'approved',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (vendor_id) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

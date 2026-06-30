@@ -16,6 +16,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [isVendor, setIsVendor] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [storeDescription, setStoreDescription] = useState('');
@@ -47,6 +48,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
           name,
           email,
           phone,
+          dateOfBirth: dateOfBirth || undefined,
           password,
           role: isVendor ? 'vendor' : 'customer',
           companyName: isVendor ? companyName : undefined,
@@ -96,6 +98,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
       setPassword('');
       setName('');
       setPhone('');
+      setDateOfBirth('');
       setIsVendor(false);
       setCompanyName('');
       setStoreDescription('');
@@ -315,6 +318,19 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
                       />
                       <label htmlFor="regPhone" className="absolute left-0 top-0 text-xs text-gray-500 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-0 peer-focus:text-xs peer-focus:text-[#0066cc]">
                         Phone Number
+                      </label>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={dateOfBirth}
+                        onChange={(e) => setDateOfBirth(e.target.value)}
+                        className="peer w-full pt-5 pb-2 border-b-2 border-gray-200 focus:border-[#0066cc] focus:outline-none transition-colors text-sm text-gray-900 bg-transparent placeholder-transparent"
+                        id="regDob"
+                      />
+                      <label htmlFor="regDob" className="absolute left-0 top-0 text-xs text-gray-500 transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:top-3 peer-focus:top-0 peer-focus:text-xs peer-focus:text-[#0066cc]">
+                        Date of Birth (Optional)
                       </label>
                     </div>
 

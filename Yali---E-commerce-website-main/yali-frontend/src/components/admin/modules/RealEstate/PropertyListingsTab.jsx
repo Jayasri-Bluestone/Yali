@@ -124,9 +124,11 @@ export function PropertyListingsTab() {
                       </td>
                       <td className="py-4 px-6">
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-black ${
+                          property.approval_status === 'pending' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                          property.approval_status === 'rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
                           property.status === 'active' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-gray-100 text-gray-600 border border-gray-200'
                         }`}>
-                          {property.status.toUpperCase()}
+                          {property.approval_status === 'pending' ? 'PENDING' : property.approval_status === 'rejected' ? 'REJECTED' : property.status.toUpperCase()}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-right">

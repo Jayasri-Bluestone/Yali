@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Home, MapPin, BedDouble, Bath, Square, Plus, Filter, Edit, Trash2 } from 'lucide-react';
+import { Home, MapPin, BedDouble, Bath, Square, Plus, Filter, Edit, Trash2, Search, Download } from 'lucide-react';
+import { exportToCSV } from '../../../../utils/csvExport';
+import { Pagination } from '../../Pagination';
 import { CategoryProductModal } from '../Shared/CategoryProductModal';
 import { API_URL } from '../../../../config';
 
@@ -14,6 +16,9 @@ const villasSchema = [
 
 export function VillasApartmentsTab() {
   const [filter, setFilter] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -63,18 +68,41 @@ export function VillasApartmentsTab() {
     fetchProperties();
   };
 
-  const filteredProperties = properties.filter(p => filter === 'All' || p.status.toLowerCase() === filter.toLowerCase());
+  const filteredProperties = properties.filter(p => {
+    const matchesFilter = filter === 'All' || p.status.toLowerCase() === filter.toLowerCase();
+    const searchStr = `${p.name || ''} ${p.metadata?.location || ''}`.toLowerCase();
+    const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
+  const totalPages = Math.ceil(filteredProperties.length / itemsPerPage);
+  const paginatedProperties = filteredProperties.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  useEffect(() => setCurrentPage(1), [searchTerm, filter]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-black text-gray-900 tracking-tight">Villas & Apartments</h2>
           <p className="text-gray-500 font-medium mt-1">Manage premium villas and luxury apartments</p>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
-          <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition-all">
-            <Filter className="w-4 h-4" /> Filters
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search properties..."
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#0066cc] focus:border-[#0066cc] transition-all bg-gray-50"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={() => exportToCSV(filteredProperties, 'villas_apartments')}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-[#0066cc] rounded-lg border border-gray-200 transition-colors text-sm font-bold"
+          >
+            <Download className="w-4 h-4" /> Export
           </button>
           <button onClick={() => handleOpenModal()} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-500 text-white font-bold rounded-xl shadow-sm hover:shadow-md transition-all">
             <Plus className="w-4 h-4" /> Add Property
@@ -119,7 +147,7 @@ export function VillasApartmentsTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredProperties.map(property => {
+                {paginatedProperties.map(property => {
                   const meta = property.metadata || {};
                   const displayImage = (property.images && property.images.length > 0) 
                     ? property.images[0] 
@@ -163,9 +191,11 @@ export function VillasApartmentsTab() {
                       </td>
                       <td className="py-4 px-6">
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-black ${
+                          property.approval_status === 'pending' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                          property.approval_status === 'rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
                           property.status === 'active' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-gray-100 text-gray-600 border border-gray-200'
                         }`}>
-                          {property.status.toUpperCase()}
+                          {property.approval_status === 'pending' ? 'PENDING' : property.approval_status === 'rejected' ? 'REJECTED' : property.status.toUpperCase()}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-right">
@@ -184,6 +214,18 @@ export function VillasApartmentsTab() {
               </tbody>
             </table>
           </div>
+          
+          {filteredProperties.length > 0 && (
+            <div className="border-t border-gray-200 p-2">
+              <Pagination 
+                currentPage={currentPage} 
+                totalPages={totalPages} 
+                onPageChange={setCurrentPage} 
+                itemsPerPage={itemsPerPage} 
+                onItemsPerPageChange={setItemsPerPage} 
+              />
+            </div>
+          )}
         </div>
       )}
 

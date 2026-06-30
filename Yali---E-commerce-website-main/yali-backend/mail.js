@@ -2,11 +2,14 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 function getTransporter() {
+  const smtpUser = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
+  const smtpPass = process.env.SMTP_PASS ? process.env.SMTP_PASS.trim() : '';
+
   const isConfigured = 
-    process.env.SMTP_USER && 
-    process.env.SMTP_USER !== 'your_email@gmail.com' &&
-    process.env.SMTP_PASS && 
-    process.env.SMTP_PASS !== 'your_app_password';
+    smtpUser && 
+    smtpUser !== 'your_email@gmail.com' &&
+    smtpPass && 
+    smtpPass !== 'your_app_password';
 
   if (!isConfigured) {
     // Return a mock object that logs emails to console rather than throwing errors
@@ -36,8 +39,8 @@ function getTransporter() {
     port: parseInt(process.env.SMTP_PORT) || 587,
     secure: process.env.SMTP_PORT === '465',
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
+      user: smtpUser,
+      pass: smtpPass
     }
   });
 }
@@ -276,9 +279,55 @@ async function sendAdminLowBalanceWarning(currentBalance, threshold) {
   }
 }
 
+// 5. Send Welcome Email to New Users
+async function sendWelcomeEmail(userEmail, userName, role, plainPassword) {
+  const isVendor = role === 'vendor';
+  const roleText = isVendor ? 'Vendor' : 'Customer';
+  const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173/login';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+      <h2 style="background: linear-gradient(to right, #0066cc, #10b981); color: white; padding: 15px; text-align: center; border-radius: 6px; margin-top: 0;">Welcome to YALI!</h2>
+      <p>Hi <strong>${userName}</strong>,</p>
+      <p>Thank you for registering as a ${roleText} at YALI. Your account has been successfully created.</p>
+      
+      <div style="background-color: #f9f9f9; padding: 15px; border-radius: 6px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #0066cc;">Your Login Credentials</h3>
+        <p style="margin: 5px 0;"><strong>Email:</strong> ${userEmail}</p>
+        <p style="margin: 5px 0;"><strong>Password:</strong> ${plainPassword}</p>
+      </div>
+
+      ${isVendor ? `
+      <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 10px 15px; margin: 20px 0;">
+        <p style="margin: 0; color: #b45309;"><strong>Note for Vendors:</strong> Your account is pending administrator approval. You will receive an update once your store details are verified.</p>
+      </div>
+      ` : ''}
+
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${loginUrl}" style="background-color: #0066cc; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Log In to Your Account</a>
+      </div>
+
+      <p style="color: #777; font-size: 12px; text-align: center;">If you didn't create this account, please ignore this email or contact support.</p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"YALI Storefront" <${process.env.SMTP_USER || 'yali@noreply.com'}>`,
+      to: userEmail,
+      subject: `Welcome to YALI, ${userName}!`,
+      html
+    });
+    console.log(`Welcome email sent to ${userEmail}`);
+  } catch (error) {
+    console.error(`Failed to send welcome email to ${userEmail}:`, error.message);
+  }
+}
+
 module.exports = {
   sendOrderConfirmation,
   sendVendorNotification,
   sendStatusUpdateNotification,
-  sendAdminLowBalanceWarning
+  sendAdminLowBalanceWarning,
+  sendWelcomeEmail
 };

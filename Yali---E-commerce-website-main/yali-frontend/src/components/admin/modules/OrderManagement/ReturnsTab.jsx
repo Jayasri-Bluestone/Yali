@@ -3,6 +3,7 @@ import { RefreshCcw, CheckCircle, XCircle, Search, Filter, Loader, Eye, Box, Dow
 import { exportToCSV } from "../../../../utils/csvExport";
 import { API_URL } from "../../../../config";
 import { useToast } from "../../../../context/ToastContext";
+import { Pagination } from "../../Pagination";
 
 export function ReturnsTab({ token, userData, isVendor }) {
   const { showToast } = useToast();
@@ -13,6 +14,8 @@ export function ReturnsTab({ token, userData, isVendor }) {
   
   const [actionModal, setActionModal] = useState({ isOpen: false, returnId: null, status: '', notes: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     fetchReturns();
@@ -73,6 +76,14 @@ export function ReturnsTab({ token, userData, isVendor }) {
     
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.ceil(filteredReturns.length / itemsPerPage);
+  const paginatedReturns = filteredReturns.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Reset to page 1 on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
 
   const getStatusBadge = (status) => {
     switch(status) {
@@ -164,7 +175,7 @@ export function ReturnsTab({ token, userData, isVendor }) {
                 </td>
               </tr>
             ) : (
-              filteredReturns.map((req) => (
+              paginatedReturns.map((req) => (
                 <tr key={req.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="p-4 pl-6">
                     <div className="flex items-center gap-3">
@@ -246,6 +257,16 @@ export function ReturnsTab({ token, userData, isVendor }) {
           </tbody>
         </table>
       </div>
+
+      {filteredReturns.length > 0 && (
+        <Pagination 
+          currentPage={currentPage} 
+          totalPages={totalPages} 
+          onPageChange={setCurrentPage} 
+          itemsPerPage={itemsPerPage} 
+          onItemsPerPageChange={setItemsPerPage} 
+        />
+      )}
 
       {/* Action Modal */}
       {actionModal.isOpen && (
