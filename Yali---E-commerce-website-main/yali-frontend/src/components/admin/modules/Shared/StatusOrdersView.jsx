@@ -1,9 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Filter } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { OrdersTable } from './OrdersTable';
 
 export function StatusOrdersView({ status, title, description, orders, onStatusChange }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const location = useLocation();
+  
+  // Parse dateRange from URL query parameters
+  const queryParams = new URLSearchParams(location.search);
+  const dateRange = queryParams.get('dateRange');
 
   // Extract unique categories for the filter dropdown
   const availableCategories = useMemo(() => {
@@ -24,8 +30,32 @@ export function StatusOrdersView({ status, title, description, orders, onStatusC
       result = result.filter(o => o.category === selectedCategory);
     }
     
+    // Filter by date range if provided in URL
+    if (dateRange && dateRange !== 'all') {
+      const now = new Date();
+      result = result.filter(o => {
+        const orderDate = new Date(o.order_date || o.created_at);
+        if (isNaN(orderDate)) return true;
+        
+        if (dateRange === 'today') {
+          return orderDate.toDateString() === now.toDateString();
+        } else if (dateRange === 'yesterday') {
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          return orderDate.toDateString() === yesterday.toDateString();
+        } else if (dateRange === 'last7days') {
+          const sevenDaysAgo = new Date(now);
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          return orderDate >= sevenDaysAgo;
+        } else if (dateRange === 'thismonth') {
+          return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
+        }
+        return true;
+      });
+    }
+    
     return result;
-  }, [orders, status, selectedCategory]);
+  }, [orders, status, selectedCategory, dateRange]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">

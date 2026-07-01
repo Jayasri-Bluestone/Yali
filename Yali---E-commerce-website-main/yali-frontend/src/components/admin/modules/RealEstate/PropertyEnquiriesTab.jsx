@@ -1,15 +1,20 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { API_URL } from '../../../../config';
 import { exportToCSV } from '../../../../utils/csvExport';
 import { Pagination } from '../../Pagination';
 import { Download, Search, Filter } from 'lucide-react';
 
 export function PropertyEnquiriesTab() {
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const initialSearch = queryParams.get('search') || '';
+
   const [enquiries, setEnquiries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState('All');
 
   const fetchEnquiries = async () => {

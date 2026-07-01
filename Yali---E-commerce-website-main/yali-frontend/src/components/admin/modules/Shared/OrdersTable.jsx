@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Package, ChevronDown, ChevronUp, MapPin, Phone, CreditCard, Box, Truck, CheckCircle, Clock, Link as LinkIcon, Send, Search, Download } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { formatINR } from '../../../../utils/currency';
 import { exportToCSV } from '../../../../utils/csvExport';
 import { Pagination } from '../../Pagination';
@@ -16,10 +17,14 @@ const STATUS_OPTIONS = [
 ];
 
 export function OrdersTable({ orders, onStatusChange, title, subtitle }) {
-  const [expandedRow, setExpandedRow] = useState(null);
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const initialSearch = queryParams.get('search') || '';
+
+  const [expandedRow, setExpandedRow] = useState(initialSearch || null);
   const [deliveryPartners, setDeliveryPartners] = useState([]);
   const [trackingForms, setTrackingForms] = useState({});
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 

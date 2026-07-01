@@ -16,6 +16,24 @@ export function LiveDashboardTab({ isVendor }) {
   
   const navigate = useNavigate();
 
+  const handleActivityClick = (act) => {
+    let baseUrl = '';
+    if (act.type === 'order') {
+      if (act.status === 'Pending') baseUrl = '/admin/orders-new';
+      else if (act.status === 'Confirmed') baseUrl = '/admin/orders-processing';
+      else if (act.status === 'Shipped' || act.status === 'Out for Delivery') baseUrl = '/admin/orders-shipped';
+      else if (act.status === 'Delivered') baseUrl = '/admin/orders-delivered';
+      else if (act.status === 'Cancelled' || act.status === 'Returned') baseUrl = '/admin/orders-cancelled';
+      else baseUrl = '/admin/orders-new';
+      
+      navigate(`${baseUrl}?search=${act.id}`);
+    } else if (act.type === 'enquiry') {
+      navigate(`/admin/property-enquiries?search=${act.id}`);
+    } else if (act.type === 'product') {
+      navigate(`/admin/products?search=${act.name}`);
+    }
+  };
+
   const fetchStats = async () => {
     try {
       const res = await fetch(`${API_URL}/dashboard/live?dateRange=${dateRange}`, {
@@ -128,10 +146,10 @@ export function LiveDashboardTab({ isVendor }) {
             <StatCard icon={Store} label="Total Vendors" value={stats?.totalVendors} color="bg-purple-50 text-purple-600" delay={50} route="/admin/vendors" />
           </>
         )}
-        <StatCard icon={ShoppingBag} label="Orders" value={stats?.liveOrdersCount} color="bg-emerald-50 text-emerald-600" delay={100} route="/admin/sales-analytics" />
-        <StatCard icon={MessageSquare} label="Leads / Enquiries" value={stats?.liveEnquiriesCount} color="bg-blue-50 text-blue-600" delay={120} route="/admin/property-enquiries" />
-        <StatCard icon={Truck} label="Out for Delivery" value={stats?.liveDeliveryCount} color="bg-orange-50 text-orange-600" delay={150} route="/admin/sales-analytics" />
-        <StatCard icon={Undo2} label="Returned / Cancelled" value={stats?.liveReturnedCount} color="bg-red-50 text-red-600" delay={200} route="/admin/refunds-returns" />
+        <StatCard icon={ShoppingBag} label="Orders" value={stats?.liveOrdersCount} color="bg-emerald-50 text-emerald-600" delay={100} route={`/admin/orders-new?dateRange=${dateRange}`} />
+        <StatCard icon={MessageSquare} label="Leads / Enquiries" value={stats?.liveEnquiriesCount} color="bg-blue-50 text-blue-600" delay={120} route={`/admin/property-enquiries?dateRange=${dateRange}`} />
+        <StatCard icon={Truck} label="Out for Delivery" value={stats?.liveDeliveryCount} color="bg-orange-50 text-orange-600" delay={150} route={`/admin/orders-shipped?dateRange=${dateRange}`} />
+        <StatCard icon={Undo2} label="Returned / Cancelled" value={stats?.liveReturnedCount} color="bg-red-50 text-red-600" delay={200} route={`/admin/orders-cancelled?dateRange=${dateRange}`} />
         <StatCard icon={Store} label="Revenue" value={stats?.totalRevenue ? `₹${Number(stats.totalRevenue).toLocaleString()}` : '₹0'} color="bg-[#0066cc]/10 text-[#0066cc]" delay={250} route="/admin/revenue-analytics" />
       </div>
 
@@ -206,7 +224,11 @@ export function LiveDashboardTab({ isVendor }) {
           <div className="space-y-4">
             {stats?.recentActivities && stats.recentActivities.length > 0 ? (
               stats.recentActivities.map((act, i) => (
-                <div key={`${act.type}-${act.id}-${i}`} className="flex gap-4 p-4 hover:bg-gray-50 rounded-xl transition-colors border border-gray-100">
+                <div 
+                  key={`${act.type}-${act.id}-${i}`} 
+                  onClick={() => handleActivityClick(act)}
+                  className="flex gap-4 p-4 hover:bg-gray-50 rounded-xl transition-colors border border-gray-100 cursor-pointer hover:border-gray-300 hover:shadow-sm"
+                >
                   <div className={`p-2 rounded-lg h-fit ${act.type === 'order' ? 'bg-emerald-50 text-emerald-600' : act.type === 'enquiry' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
                     {act.type === 'order' ? <ShoppingBag className="w-4 h-4" /> : act.type === 'enquiry' ? <MessageSquare className="w-4 h-4" /> : <Store className="w-4 h-4" />}
                   </div>

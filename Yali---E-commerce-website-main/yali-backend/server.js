@@ -77,6 +77,29 @@ const upload = multer({
   }
 });
 
+// Helper functions for parsing managed_category JSON arrays
+function hasCategoryAccess(userManagedCategory, targetCategory) {
+  if (!userManagedCategory || userManagedCategory === 'all') return true;
+  let cats = [];
+  try {
+    cats = JSON.parse(userManagedCategory);
+  } catch(e) {
+    cats = [userManagedCategory];
+  }
+  if (cats.includes('all')) return true;
+  return cats.includes(targetCategory);
+}
+
+function getManagedCategoriesArray(userManagedCategory) {
+  if (!userManagedCategory) return [];
+  if (userManagedCategory === 'all') return ['all'];
+  try {
+    return JSON.parse(userManagedCategory);
+  } catch(e) {
+    return [userManagedCategory];
+  }
+}
+
 // Token Authentication Middleware
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -517,6 +540,86 @@ app.get('/yali_api/auth/me', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// -------------------------------------------------------------
+// 📊 DASHBOARD LIVE ROUTES
+// -------------------------------------------------------------
+app.get('/yali_api/dashboard/live', authenticateToken, async (req, res) => {
+  const { dateRange } = req.query; // 'today', 'yesterday', 'last7days', 'thismonth', 'all'
+  
+  let dateFilter = '';
+  if (dateRange === 'today') {
+    dateFilter = 'DATE(created_at) = CURDATE()';
+  } else if (dateRange === 'yesterday') {
+    dateFilter = 'DATE(created_at) = CURDATE() - INTERVAL 1 DAY';
+  } else if (dateRange === 'last7days') {
+    dateFilter = 'DATE(created_at) >= CURDATE() - INTERVAL 7 DAY';
+  } else if (dateRange === 'thismonth') {
+    dateFilter = 'MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())';
+  } else {
+    dateFilter = '1=1'; // 'all'
+  }
+
+  let orderDateFilter = dateFilter.replace(/created_at/g, 'order_date');
+
+  try {
+    const [
+      customersRes,
+      vendorsRes,
+      liveOrdersRes,
+      liveEnquiriesRes,
+      deliveryRes,
+      returnedRes,
+      revenueRes,
+      pendingProductsRes,
+      lowStockRes,
+      unansweredEnquiriesRes,
+      recentOrdersRes,
+      recentEnquiriesRes,
+      recentProductsRes
+    ] = await Promise.all([
+      pool.query('SELECT COUNT(*) as count FROM users WHERE role = "customer"'),
+      pool.query('SELECT COUNT(*) as count FROM users WHERE role = "vendor"'),
+      pool.query(`SELECT COUNT(*) as count FROM orders WHERE ${orderDateFilter}`),
+      pool.query(`SELECT COUNT(*) as count FROM enquiries WHERE ${dateFilter}`),
+      pool.query(`SELECT COUNT(*) as count FROM orders WHERE status IN ('Shipped', 'Out for Delivery') AND ${orderDateFilter}`),
+      pool.query(`SELECT COUNT(*) as count FROM orders WHERE status IN ('Returned', 'Cancelled') AND ${orderDateFilter}`),
+      pool.query(`SELECT SUM(total) as total FROM orders WHERE status NOT IN ('Returned', 'Cancelled') AND ${orderDateFilter}`),
+      pool.query('SELECT COUNT(*) as count FROM products WHERE approval_status = "pending"'),
+      pool.query('SELECT COUNT(*) as count FROM products WHERE stock < 5 AND status = "active"'),
+      pool.query('SELECT COUNT(*) as count FROM enquiries WHERE status = "pending"'),
+      pool.query('SELECT order_id as id, status, order_date as created_at, "order" as type FROM orders ORDER BY order_date DESC LIMIT 5'),
+      pool.query('SELECT id, full_name as name, status, created_at, "enquiry" as type FROM enquiries ORDER BY created_at DESC LIMIT 5'),
+      pool.query('SELECT id, name, status, created_at, "product" as type FROM products ORDER BY created_at DESC LIMIT 5')
+    ]);
+
+    const recentActivities = [
+      ...recentOrdersRes[0],
+      ...recentEnquiriesRes[0],
+      ...recentProductsRes[0]
+    ]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 10);
+
+    res.json({
+      totalCustomers: customersRes[0][0].count,
+      totalVendors: vendorsRes[0][0].count,
+      liveOrdersCount: liveOrdersRes[0][0].count,
+      liveEnquiriesCount: liveEnquiriesRes[0][0].count,
+      liveDeliveryCount: deliveryRes[0][0].count,
+      liveReturnedCount: returnedRes[0][0].count,
+      totalRevenue: revenueRes[0][0].total || 0,
+      pendingProductsCount: pendingProductsRes[0][0].count,
+      lowStockCount: lowStockRes[0][0].count,
+      unansweredEnquiriesCount: unansweredEnquiriesRes[0][0].count,
+      recentActivities
+    });
+
+  } catch (error) {
+    console.error('Live Dashboard Error:', error);
+    res.status(500).json({ error: 'Server error fetching live dashboard stats' });
   }
 });
 
@@ -998,11 +1101,9 @@ app.delete('/yali_api/products/:id', authenticateToken, async (req, res) => {
     }
 
     // Admin/Vendor category restriction
-    if (req.user.managed_category && req.user.managed_category !== 'all') {
-      if (req.user.managed_category !== prod.category) {
-        return res.status(403).json({ error: `Unauthorized: You can only manage items in the '${req.user.managed_category}' category.` });
+    if (!hasCategoryAccess(req.user.managed_category, prod.category)) {
+        return res.status(403).json({ error: `Unauthorized: You can only manage items in your authorized categories.` });
       }
-    }
 
     await pool.query('DELETE FROM products WHERE id = ?', [productId]);
     res.json({ message: 'Product deleted successfully' });
@@ -1380,10 +1481,8 @@ app.put('/yali_api/orders/:id/status', authenticateToken, async (req, res) => {
         return res.status(403).json({ error: 'Unauthorized: This order is not assigned to you' });
       }
       // Check if user is restricted by category
-      if (req.user.managed_category && req.user.managed_category !== 'all') {
-        if (req.user.managed_category !== order.category) {
-          return res.status(403).json({ error: `Unauthorized: You can only manage orders for '${req.user.managed_category}'.` });
-        }
+      if (!hasCategoryAccess(req.user.managed_category, order.category)) {
+        return res.status(403).json({ error: `Unauthorized: You can only manage items in your authorized categories.` });
       }
     }
 
@@ -1728,11 +1827,9 @@ app.post('/yali_api/admin/orders/:id/verify_crypto', authenticateToken, async (r
     const order = orders[0];
 
     // Check if user is restricted by category
-    if (req.user.managed_category && req.user.managed_category !== 'all') {
-      if (req.user.managed_category !== order.category) {
-        throw new Error(`Unauthorized: You can only manage orders for '${req.user.managed_category}'.`);
+    if (!hasCategoryAccess(req.user.managed_category, order.category)) {
+        throw new Error(`Unauthorized: You can only manage items in your authorized categories.`);
       }
-    }
 
     if (order.status !== 'Pending Payment Verification') {
       throw new Error('Order is not pending payment verification');
@@ -2011,7 +2108,14 @@ app.put('/yali_api/users/:id/role', authenticateToken, async (req, res) => {
   const { role, managedCategory } = req.body;
 
   try {
-    await pool.query('UPDATE users SET role = ?, managed_category = ? WHERE id = ?', [role, managedCategory || null, userId]);
+    // Store arrays as JSON strings safely
+    let catToStore = managedCategory || null;
+    if (Array.isArray(managedCategory)) {
+      catToStore = JSON.stringify(managedCategory);
+    } else if (managedCategory && typeof managedCategory === 'object') {
+      catToStore = JSON.stringify(managedCategory);
+    }
+    await pool.query('UPDATE users SET role = ?, managed_category = ? WHERE id = ?', [role, catToStore, userId]);
     res.json({ message: 'User role updated successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

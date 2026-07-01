@@ -145,17 +145,68 @@ export function CustomersTab({
                     />
                   </td>
                   <td className="p-4">
-                    <select
-                      value={u.managed_category || 'all'}
-                      onChange={(e) => handleUserRoleChange(u.id, u.role, e.target.value === 'all' ? null : e.target.value)}
-                      disabled={u.role !== 'admin'}
-                      className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none cursor-pointer disabled:opacity-50"
-                    >
-                      <option value="all">Full Access (All)</option>
-                      {categoriesList.map(c => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
+                    {(() => {
+                      let currentCats = [];
+                      if (!u.managed_category || u.managed_category === 'all') {
+                        currentCats = ['all'];
+                      } else {
+                        try {
+                          currentCats = JSON.parse(u.managed_category);
+                          if (!Array.isArray(currentCats)) currentCats = [u.managed_category];
+                        } catch(e) {
+                          currentCats = [u.managed_category];
+                        }
+                      }
+                      
+                      const isDisabled = u.role !== 'admin';
+                      
+                      return (
+                        <div className={`flex flex-col gap-1 w-full max-w-[220px] ${isDisabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {currentCats.includes('all') ? (
+                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold">Full Access</span>
+                            ) : (
+                              currentCats.map(cat => (
+                                <span key={cat} className="flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-700 text-[10px] rounded font-medium">
+                                  {categoriesList.find(c => c.value === cat)?.label || cat}
+                                  <button 
+                                    onClick={() => {
+                                      if (isDisabled) return;
+                                      const newCats = currentCats.filter(c => c !== cat);
+                                      handleUserRoleChange(u.id, u.role, newCats.length === 0 ? null : JSON.stringify(newCats));
+                                    }}
+                                    className="text-gray-400 hover:text-red-500 font-bold ml-0.5"
+                                  >×</button>
+                                </span>
+                              ))
+                            )}
+                          </div>
+                          <select
+                            value=""
+                            disabled={isDisabled}
+                            onChange={(e) => {
+                              if (isDisabled) return;
+                              const val = e.target.value;
+                              if (!val) return;
+                              if (val === 'all') {
+                                handleUserRoleChange(u.id, u.role, null);
+                              } else {
+                                let newCats = [...currentCats.filter(c => c !== 'all')];
+                                if (!newCats.includes(val)) newCats.push(val);
+                                handleUserRoleChange(u.id, u.role, JSON.stringify(newCats));
+                              }
+                            }}
+                            className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0066cc] cursor-pointer bg-white"
+                          >
+                            <option value="">+ Add Access</option>
+                            <option value="all">Full Access (All)</option>
+                            {categoriesList.filter(c => !currentCats.includes(c.value) && !currentCats.includes('all')).map(c => (
+                              <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="p-4 text-center">
                     <button

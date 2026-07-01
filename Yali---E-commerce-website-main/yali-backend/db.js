@@ -54,6 +54,7 @@ async function initDB() {
       await connection.query("ALTER TABLE users ADD COLUMN department VARCHAR(100) NULL");
       await connection.query("ALTER TABLE users ADD COLUMN date_of_birth DATE NULL");
       await connection.query("ALTER TABLE users ADD COLUMN plain_password VARCHAR(255) NULL");
+      await connection.query("ALTER TABLE users MODIFY COLUMN managed_category VARCHAR(1000) NULL");
     } catch(e) {
       if (e.code !== 'ER_DUP_FIELDNAME') console.warn('Could not modify role or add columns to users:', e.message);
     }

@@ -179,11 +179,24 @@ export function AdminDashboard({
 }) {
   const { showToast, showConfirm } = useToast();
 
+  const getManagedCategories = () => {
+    const raw = userData?.managed_category;
+    if (!raw || raw === 'all') return ['all'];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [raw];
+    } catch {
+      return [raw];
+    }
+  };
+  const managedCategories = getManagedCategories();
+
   // Role and scope identifiers
-  const isSuperAdmin = userData?.role === 'admin' && (!userData?.managed_category || userData?.managed_category === 'all');
-  const isCategoryAdmin = userData?.role === 'admin' && userData?.managed_category && userData?.managed_category !== 'all';
+  const isSuperAdmin = userData?.role === 'admin' && managedCategories.includes('all');
+  const isCategoryAdmin = userData?.role === 'admin' && !managedCategories.includes('all') && managedCategories.length > 0;
   const isVendor = userData?.role === 'vendor';
-  const adminCategory = userData?.managed_category;
+  // If multiple categories are assigned but UI needs one default category lock:
+  const adminCategory = isCategoryAdmin ? managedCategories[0] : 'all'; 
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -239,9 +252,7 @@ export function AdminDashboard({
   const filteredProducts = products.filter(p => {
     if (isVendor) return p.vendor_id === userData.id;
     if (isCategoryAdmin) {
-      const pCat = (p.category || '').toLowerCase().replace(/[\s-]/g, '');
-      const aCat = (adminCategory || '').toLowerCase().replace(/[\s-]/g, '');
-      return pCat === aCat;
+      return managedCategories.includes(p.category);
     }
     return true; // Super admin sees all
   });
@@ -249,18 +260,14 @@ export function AdminDashboard({
   const filteredOrders = orders.filter(o => {
     if (isVendor) return o.items && o.items.some(i => i.vendor_id === userData.id);
     if (isCategoryAdmin) {
-      const oCat = (o.category || '').toLowerCase().replace(/[\s-]/g, '');
-      const aCat = (adminCategory || '').toLowerCase().replace(/[\s-]/g, '');
-      return oCat === aCat;
+      return managedCategories.includes(o.category);
     }
     return true; // Super admin sees all
   });
 
   const filteredBanners = banners.filter(b => {
     if (isCategoryAdmin) {
-      const bCat = (b.category || '').toLowerCase().replace(/[\s-]/g, '');
-      const aCat = (adminCategory || '').toLowerCase().replace(/[\s-]/g, '');
-      return bCat === aCat;
+      return managedCategories.includes(b.category);
     }
     return true;
   });
@@ -498,7 +505,7 @@ export function AdminDashboard({
   ];
 
   const toggleGroup = (groupName) => {
-    setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
+    setExpandedGroups(prev => (prev[groupName] ? {} : { [groupName]: true }));
   };
 
   // -------------------------------------------------------------
